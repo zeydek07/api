@@ -6,7 +6,8 @@ import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { debounceTime } from 'rxjs';
 import { API_URL, qty, toParams } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
-import { Hospital, MOVEMENT_LABELS, Movement, MovementType, Page, Product, User, Warehouse } from '../../core/models';
+import { Hospital, MOVEMENT_LABELS, Movement, MovementType, Page, Product, User, Warehouse, placeName } from '../../core/models';
+import { RouterLink } from '@angular/router';
 import { Pagination } from '../../ui/pagination';
 import { ProductPicker } from '../../ui/product-picker';
 
@@ -16,11 +17,15 @@ const TYPE_STYLE: Record<MovementType, { badge: string; icon: string }> = {
   transfer_out: { badge: 'badge-warn', icon: 'logout' },
   usage: { badge: 'badge-primary', icon: 'medical_services' },
   adjustment: { badge: '', icon: 'fact_check' },
+  consign_out: { badge: 'badge-primary', icon: 'local_shipping' },
+  consign_in: { badge: 'badge-primary', icon: 'local_hospital' },
+  return_out: { badge: 'badge-warn', icon: 'undo' },
+  return_in: { badge: 'badge-warn', icon: 'assignment_return' },
 };
 
 /** Kim, ne zaman, hangi depodan, ne kullandı */
 @Component({
-  imports: [DatePipe, ReactiveFormsModule, Pagination, ProductPicker],
+  imports: [DatePipe, ReactiveFormsModule, RouterLink, Pagination, ProductPicker],
   templateUrl: './movements.html',
 })
 export class MovementsPage implements OnInit {
@@ -39,6 +44,7 @@ export class MovementsPage implements OnInit {
   protected readonly typeStyle: Record<string, { badge: string; icon: string }> = TYPE_STYLE;
   protected readonly types = Object.keys(MOVEMENT_LABELS) as MovementType[];
   protected readonly qty = qty;
+  protected readonly place = placeName;
   protected readonly product = signal<Product | null>(null);
 
   protected readonly filters = inject(FormBuilder).nonNullable.group({

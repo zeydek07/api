@@ -56,6 +56,12 @@ class Hospital extends Model
         return $this->belongsTo(User::class, 'responsible_user_id')->withTrashed();
     }
 
+    /** Konsinye teslimat ve geri alma belgeleri */
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(Delivery::class);
+    }
+
     public function movements(): HasMany
     {
         return $this->hasMany(StockMovement::class);

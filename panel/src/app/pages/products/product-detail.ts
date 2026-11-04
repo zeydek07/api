@@ -2,7 +2,7 @@ import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
 import { HttpClient } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { API_URL, qty } from '../../core/api';
-import { Product, Stock, TRACKING_LABELS, WAREHOUSE_LABELS } from '../../core/models';
+import { Product, Stock, TRACKING_LABELS, WAREHOUSE_LABELS, placeName } from '../../core/models';
 import { ExpiryBadge } from '../../ui/expiry-badge';
 import { ModalFrame } from '../../ui/modal-frame';
 
@@ -66,7 +66,7 @@ import { ModalFrame } from '../../ui/modal-frame';
               @for (s of stocks(); track s.id) {
                 <tr>
                   <td>
-                    <div class="cell-title">{{ s.warehouse?.name }}</div>
+                    <div class="cell-title">{{ place(s.warehouse) }}</div>
                     <div class="cell-sub">{{ labels[s.warehouse?.type ?? ''] }}</div>
                   </td>
                   <td class="font-mono text-[13px]">
@@ -113,6 +113,7 @@ export class ProductDetailDialog {
   protected readonly labels: Record<string, string> = WAREHOUSE_LABELS;
   protected readonly trackingLabels: Record<string, string> = TRACKING_LABELS;
   protected readonly qty = qty;
+  protected readonly place = placeName;
 
   constructor() {
     inject(HttpClient)

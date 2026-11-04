@@ -302,6 +302,26 @@
     @apply my-1.5 h-px bg-line;
   }
 
+  /* Adım numarası (1, 2, 3…); tamamlanınca yeşil */
+  .step {
+    @apply grid size-7 shrink-0 place-items-center rounded-full bg-surface-2 text-xs font-bold text-muted ring-1 ring-line;
+  }
+  .step-done {
+    @apply bg-primary text-white ring-primary;
+  }
+  .dark .step-done {
+    @apply text-slate-950;
+  }
+
+  /* Seçim çipi (lokasyon, kişi, araç) */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-sm text-ink-2
+      transition hover:border-primary hover:text-ink cursor-pointer;
+  }
+  .chip-on {
+    @apply border-primary bg-primary-soft text-primary-ink;
+  }
+
   /* İnce yükleniyor çubuğu */
   .loading-bar {
     @apply relative h-0.5 overflow-hidden bg-primary-soft;
@@ -323,6 +343,63 @@
   }
   100% {
     left: 100%;
+  }
+}
+
+/* ---------- Belge ve yazdırma ---------- */
+.doc-label {
+  @apply mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  /* Belge her zaman açık temada basılır */
+  .dark {
+    color-scheme: light;
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --line: #e4e7ec;
+    --ink: #0f172a;
+    --ink-2: #334155;
+    --muted: #64748b;
+    --primary: #0d9488;
+    --primary-soft: #e6f6f4;
+    --primary-ink: #0f766e;
+    --danger: #dc2626;
+    --danger-soft: #fdecec;
+    --warn: #b45309;
+    --warn-soft: #fef3e2;
+    --ok: #15803d;
+    --ok-soft: #e8f6ec;
+  }
+  .no-print,
+  app-shell aside,
+  app-shell header,
+  app-toaster {
+    display: none !important;
+  }
+  app-shell > div {
+    padding-left: 0 !important;
+  }
+  app-shell main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .document {
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .document tr {
+    break-inside: avoid;
   }
 }
 

@@ -17,9 +17,18 @@ export interface WarehouseRef {
   name: string;
   code: string;
   type: WarehouseType;
+  hospital_id?: number | null;
+  /** Konsinye lokasyonuysa ait olduğu hastane */
+  hospital?: { id: number; name: string } | null;
 }
 
-export type WarehouseType = 'central' | 'branch' | 'field';
+export type WarehouseType = 'central' | 'branch' | 'field' | 'consignment';
+
+/** "Kartal Devlet Hastanesi · Ana konsinye deposu" ya da "Merkez Depo" */
+export function placeName(w: WarehouseRef | { name: string; hospital?: { name: string } | null } | null | undefined): string {
+  if (!w) return '';
+  return w.hospital ? `${w.hospital.name} · ${w.name}` : w.name;
+}
 
 export interface Profile {
   id: number;
@@ -120,9 +129,76 @@ export interface Hospital {
   address: string | null;
   notes: string | null;
   is_active: boolean;
+  responsible_user_id?: number | null;
+  /** Hastaneye bakan firma personeli (mümessil) */
+  responsible?: { id: number; name: string } | null;
+  /** Hastanedeki konsinye ürün adedi */
+  consignment_units?: string | number | null;
   deliveries_30d?: number;
   last_delivery_at?: string | null;
 }
+
+/** Hastanede konsinye ürünlerin durduğu yer */
+export interface ConsignmentLocation {
+  id: number;
+  name: string;
+  code: string;
+  hospital_id: number;
+  is_active: boolean;
+  units?: string | number | null;
+}
+
+/** Hastane personeli: teslim alan / muhatap (firma personeli değil) */
+export interface HospitalContact {
+  id: number;
+  hospital_id: number;
+  location_id: number | null;
+  location?: { id: number; name: string } | null;
+  name: string;
+  title: string | null;
+  phone: string | null;
+  email: string | null;
+  is_active: boolean;
+}
+
+export type DeliveryType = 'delivery' | 'return';
+
+export interface Delivery {
+  id: number;
+  number: string;
+  type: DeliveryType;
+  status: 'completed' | 'cancelled';
+  hospital_id: number;
+  location_id: number;
+  vehicle_id: number;
+  contact_id: number | null;
+  receiver_name: string;
+  receiver_title: string | null;
+  user_id: number;
+  delivered_at: string;
+  device_time: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  note: string | null;
+  has_signature: boolean;
+  has_photo: boolean;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  lines_count?: number;
+  units?: string | number | null;
+  hospital?: { id: number; name: string; code?: string | null; city?: string | null; district?: string | null; address?: string | null };
+  location?: { id: number; name: string; code?: string };
+  vehicle?: { id: number; name: string; code?: string };
+  contact?: { id: number; name: string; title: string | null; phone: string | null; email: string | null } | null;
+  user?: { id: number; name: string; email?: string; phone?: string | null };
+  canceller?: { id: number; name: string } | null;
+  lines?: Movement[];
+}
+
+export const DELIVERY_LABELS: Record<DeliveryType, string> = {
+  delivery: 'Konsinye teslim',
+  return: 'Geri alma',
+};
 
 /** Sıra, formlarda ve filtrelerde görünen sıradır. */
 export const HOSPITAL_LABELS: Record<HospitalType, string> = {
@@ -136,7 +212,16 @@ export const HOSPITAL_LABELS: Record<HospitalType, string> = {
 
 export const HOSPITAL_TYPES = Object.keys(HOSPITAL_LABELS) as HospitalType[];
 
-export type MovementType = 'in' | 'usage' | 'transfer_out' | 'transfer_in' | 'adjustment';
+export type MovementType =
+  | 'in'
+  | 'usage'
+  | 'transfer_out'
+  | 'transfer_in'
+  | 'adjustment'
+  | 'consign_out'
+  | 'consign_in'
+  | 'return_out'
+  | 'return_in';
 
 export interface Movement {
   id: number;
@@ -153,7 +238,8 @@ export interface Movement {
   longitude: string | null;
   created_at: string;
   product?: { id: number; name: string; code: string; unit: string };
-  warehouse?: { id: number; name: string; code?: string };
+  warehouse?: { id: number; name: string; code?: string; hospital?: { id: number; name: string } | null };
+  delivery?: { id: number; number: string; type: DeliveryType } | null;
   user?: { id: number; name: string };
   hospital?: { id: number; name: string; city?: string | null } | null;
 }
@@ -164,10 +250,15 @@ export const MOVEMENT_LABELS: Record<MovementType, string> = {
   transfer_out: 'Transfer (çıkış)',
   transfer_in: 'Transfer (giriş)',
   adjustment: 'Sayım düzeltmesi',
+  consign_out: 'Konsinye teslim (araçtan)',
+  consign_in: 'Konsinye teslim (hastaneye)',
+  return_out: 'Geri alma (hastaneden)',
+  return_in: 'Geri alma (araca)',
 };
 
 export const WAREHOUSE_LABELS: Record<WarehouseType, string> = {
   central: 'Merkez depo',
   branch: 'Şube deposu',
   field: 'Personel çantası / araç',
+  consignment: 'Hastane konsinye lokasyonu',
 };

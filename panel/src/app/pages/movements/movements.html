@@ -90,7 +90,12 @@
               <span class="ms-1 text-muted">{{ m.product?.unit }}</span>
               <div class="cell-sub">Kalan {{ qty(m.balance_after) }}</div>
             </td>
-            <td class="whitespace-nowrap">{{ m.warehouse?.name }}</td>
+            <td class="whitespace-nowrap">
+              {{ place(m.warehouse) }}
+              @if (m.delivery) {
+                <a class="cell-sub block font-mono text-primary-ink hover:underline" [routerLink]="['/teslimatlar', m.delivery.id]">{{ m.delivery.number }}</a>
+              }
+            </td>
             <td class="min-w-40">
               @if (m.hospital) {
                 <div class="flex items-center gap-1.5 text-ink">

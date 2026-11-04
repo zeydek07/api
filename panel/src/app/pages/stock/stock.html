@@ -26,7 +26,7 @@
       <select class="select w-60" [formControl]="warehouseId" aria-label="Depo">
         <option value="">Tüm depolar</option>
         @for (w of warehouses(); track w.id) {
-          <option [value]="w.id">{{ w.name }}</option>
+          <option [value]="w.id">{{ place(w) }}</option>
         }
       </select>
     }
@@ -71,7 +71,7 @@
               </div>
             </td>
             <td>
-              <div class="text-ink">{{ s.warehouse?.name }}</div>
+              <div class="text-ink">{{ place(s.warehouse) }}</div>
               <div class="cell-sub">{{ labels[s.warehouse?.type ?? ''] }}</div>
             </td>
             <td class="font-mono text-[13px]">

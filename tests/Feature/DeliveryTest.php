@@ -98,9 +98,14 @@ class DeliveryTest extends ApiTestCase
         $this->assertArrayNotHasKey('signature_path', $show->json());
         $this->withToken($token)->get("/api/deliveries/{$d->id}/signature")->assertOk()->assertHeader('content-type', 'image/png');
 
-        // Hastanenin konsinye stoğunda görünüyor
-        $this->withToken($this->tokenFor($this->manager))->getJson("/api/hospitals/{$this->hospital->id}/consignment")
+        // Hastanenin konsinye stoğunda ve hastane listesinde görünüyor
+        $mgr = $this->tokenFor($this->manager);
+        $this->withToken($mgr)->getJson("/api/hospitals/{$this->hospital->id}/consignment")
             ->assertOk()->assertJsonPath('summary.units', 3);
+        $row = $this->withToken($mgr)->getJson('/api/hospitals?q=Kartal')->assertOk()->json('data.0');
+        $this->assertSame(1, $row['deliveries_30d']);
+        $this->assertEquals(3, $row['consignment_units']);
+        $this->assertNotNull($row['last_delivery_at']);
     }
 
     public function test_signature_is_required_and_receiver_must_be_given(): void

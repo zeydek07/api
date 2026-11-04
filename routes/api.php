@@ -117,12 +117,13 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
         ->middleware('permission:movements.view_team|movements.view_all');
 
     // Mobil saha uygulaması
-    Route::prefix('mobile')->middleware('permission:usage.create')->group(function () {
+    Route::prefix('mobile')->middleware('permission:usage.create|deliveries.create')->group(function () {
+        // Aracım ve içindeki stok: kullanım ve konsinye teslimat için ortak
         Route::get('warehouses', [MobileController::class, 'warehouses']);
         Route::get('warehouses/{warehouse}/stock', [MobileController::class, 'warehouseStock']);
         Route::get('hospitals', [MobileController::class, 'hospitals']);
-        Route::post('usages', [MobileController::class, 'storeUsage'])->middleware('throttle:usage');
-        Route::get('usages', [MobileController::class, 'myUsages']);
+        Route::post('usages', [MobileController::class, 'storeUsage'])->middleware(['permission:usage.create', 'throttle:usage']);
+        Route::get('usages', [MobileController::class, 'myUsages'])->middleware('permission:usage.create');
     });
 });
 

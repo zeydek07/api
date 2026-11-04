@@ -26,14 +26,17 @@
           @if (d.hospital.code) {
             <span class="inline-flex items-center gap-1.5 font-mono"><span class="icon text-[16px]">tag</span>{{ d.hospital.code }}</span>
           }
+          <span class="inline-flex items-center gap-1.5" title="Hastaneye bakan firma personeli">
+            <span class="icon text-[16px]">badge</span>Sorumlu: {{ d.hospital.responsible?.name ?? 'atanmamış' }}
+          </span>
         </div>
         @if (d.hospital.notes) {
           <p class="mt-3 text-sm text-ink-2">{{ d.hospital.notes }}</p>
         }
       </div>
       <div class="flex gap-2">
-        <a class="btn btn-primary" *appCan="'usage.create'" routerLink="/teslimat" [queryParams]="{ hastane: d.hospital.id }">
-          <span class="icon">add_box</span> Teslimat gir
+        <a class="btn btn-primary" *appCan="'deliveries.create'" routerLink="/teslimat" [queryParams]="{ hastane: d.hospital.id }">
+          <span class="icon">move_to_inbox</span> Teslimat yap
         </a>
         <button class="btn btn-secondary" *appCan="'hospitals.update'" (click)="edit()">
           <span class="icon">edit</span> Düzenle
@@ -42,6 +45,35 @@
     </div>
   </div>
 
+  <!-- Sekmeler -->
+  <div class="mb-5 flex gap-1 overflow-x-auto border-b border-line" role="tablist">
+    @for (t of tabs; track t.key) {
+      <button
+        role="tab"
+        class="-mb-px flex shrink-0 items-center gap-2 border-b-2 px-4 pb-3 text-sm font-medium transition"
+        [class]="tab() === t.key ? 'border-primary text-ink' : 'border-transparent text-muted hover:text-ink'"
+        [attr.aria-selected]="tab() === t.key"
+        (click)="tab.set(t.key)"
+      >
+        <span class="icon text-[18px]">{{ t.icon }}</span>{{ t.label }}
+      </button>
+    }
+  </div>
+
+  @switch (tab()) {
+    @case ('konsinye') {
+      <app-hospital-consignment [hospitalId]="d.hospital.id" [locations]="locations()" />
+    }
+    @case ('teslimatlar') {
+      <app-hospital-deliveries [hospitalId]="d.hospital.id" />
+    }
+    @case ('kisiler') {
+      <app-hospital-contacts [hospitalId]="d.hospital.id" [locations]="locations()" />
+    }
+    @case ('lokasyonlar') {
+      <app-hospital-locations [hospitalId]="d.hospital.id" [locations]="allLocations()" [changed]="reloadLocations" />
+    }
+    @default {
   <!-- Tarih aralığı -->
   <div class="mb-4 flex flex-wrap items-end gap-3">
     <div>
@@ -184,6 +216,8 @@
       </table>
     </div>
   </div>
+    }
+  }
 } @else {
   <div class="card mb-6 h-36 p-6"><div class="skeleton h-full"></div></div>
   <div class="card h-80 p-6"><div class="skeleton h-full"></div></div>

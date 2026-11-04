@@ -1,3 +1,6 @@
+/** Teslimat belgelerini görebilenler (kendi belgeleri / ekip / herkes) */
+export const DELIVERY_VIEWERS = ['deliveries.create', 'deliveries.cancel', 'movements.view_team', 'movements.view_all'];
+
 export interface MenuItem {
   label: string;
   icon: string;
@@ -19,7 +22,8 @@ export const MENU_GROUPS: MenuGroup[] = [
   {
     title: 'Saha',
     items: [
-      { label: 'Hastaneye Teslim', icon: 'local_hospital', path: '/teslimat', permission: 'usage.create' },
+      { label: 'Hastaneye Teslim', icon: 'local_hospital', path: '/teslimat', permission: 'deliveries.create' },
+      { label: 'Teslimatlar', icon: 'receipt_long', path: '/teslimatlar', permission: DELIVERY_VIEWERS },
       { label: 'Hastaneler', icon: 'domain', path: '/hastaneler', permission: 'hospitals.view' },
     ],
   },

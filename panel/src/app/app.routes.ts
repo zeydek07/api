@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard, guestGuard, permissionGuard } from './core/guards';
+import { DELIVERY_VIEWERS } from './layout/menu';
 import { Shell } from './layout/shell';
 
 export const routes: Routes = [
@@ -25,8 +26,20 @@ export const routes: Routes = [
       {
         path: 'teslimat',
         title: 'Hastaneye Teslim',
-        data: { permission: 'usage.create' },
+        data: { permission: 'deliveries.create' },
         loadComponent: () => import('./pages/delivery/delivery').then((m) => m.DeliveryPage),
+      },
+      {
+        path: 'teslimatlar',
+        title: 'Teslimatlar',
+        data: { permission: DELIVERY_VIEWERS },
+        loadComponent: () => import('./pages/deliveries/deliveries').then((m) => m.DeliveriesPage),
+      },
+      {
+        path: 'teslimatlar/:id',
+        title: 'Teslimat belgesi',
+        data: { permission: DELIVERY_VIEWERS },
+        loadComponent: () => import('./pages/deliveries/delivery-document').then((m) => m.DeliveryDocumentPage),
       },
       {
         path: 'hastaneler',

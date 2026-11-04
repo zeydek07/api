@@ -41,7 +41,8 @@
         <tr>
           <th>Hastane</th>
           <th>Konum</th>
-          <th class="num">Son 30 gün</th>
+          <th>Sorumlu</th>
+          <th class="num">Konsinye stok</th>
           <th>Son teslimat</th>
           <th class="actions"><span class="sr-only">İşlemler</span></th>
         </tr>
@@ -74,15 +75,27 @@
                 <div class="cell-sub">{{ h.district }}</div>
               }
             </td>
+            <td class="whitespace-nowrap">
+              @if (h.responsible) {
+                <span class="text-ink">{{ h.responsible.name }}</span>
+              } @else {
+                <span class="text-muted">Atanmamış</span>
+              }
+            </td>
             <td class="num">
-              @if (h.deliveries_30d) {
-                <span class="font-semibold text-ink">{{ h.deliveries_30d }}</span><span class="ms-1 text-muted">kalem</span>
+              @if (+(h.consignment_units ?? 0) > 0) {
+                <span class="font-semibold text-ink">{{ qty(h.consignment_units) }}</span><span class="ms-1 text-muted">adet</span>
               } @else {
                 <span class="text-muted">—</span>
               }
             </td>
-            <td class="whitespace-nowrap text-muted">
-              {{ h.last_delivery_at ? (h.last_delivery_at | date: 'dd.MM.yyyy HH:mm') : 'Henüz yok' }}
+            <td class="whitespace-nowrap">
+              @if (h.last_delivery_at) {
+                <div class="text-ink">{{ h.last_delivery_at | date: 'dd.MM.yyyy' }}</div>
+                <div class="cell-sub">son 30 günde {{ h.deliveries_30d }} teslimat</div>
+              } @else {
+                <span class="text-muted">Henüz yok</span>
+              }
             </td>
             <td class="actions" (click)="$event.stopPropagation()">
               <ng-container *appCan="['hospitals.update', 'hospitals.delete']">
@@ -92,7 +105,7 @@
                 <ng-template #rowMenu>
                   <div class="menu" cdkMenu>
                     <button class="menu-item" cdkMenuItem (cdkMenuItemTriggered)="openDetail(h)">
-                      <span class="icon">history</span> Teslimat geçmişi
+                      <span class="icon">open_in_new</span> Hastane sayfası
                     </button>
                     <button class="menu-item" *appCan="'hospitals.update'" cdkMenuItem (cdkMenuItemTriggered)="open(h)">
                       <span class="icon">edit</span> Düzenle
@@ -110,7 +123,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="5" class="py-16 text-center">
+            <td colspan="6" class="py-16 text-center">
               @if (!loading()) {
                 <span class="icon text-[40px] text-muted">domain_disabled</span>
                 <p class="mt-2 font-medium text-ink">Hastane bulunamadı</p>

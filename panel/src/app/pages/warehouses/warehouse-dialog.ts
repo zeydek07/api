@@ -72,7 +72,8 @@ export class WarehouseDialog {
   private readonly toast = inject(ToastService);
 
   protected readonly labels: Record<string, string> = WAREHOUSE_LABELS;
-  protected readonly types = Object.keys(WAREHOUSE_LABELS) as WarehouseType[];
+  // Konsinye lokasyonları hastane sayfasından yönetilir
+  protected readonly types = (Object.keys(WAREHOUSE_LABELS) as WarehouseType[]).filter((t) => t !== 'consignment');
   protected readonly canListUsers = inject(AuthService).can('users.view');
   protected readonly users = signal<User[]>([]);
   protected readonly userIds = signal<number[]>((this.data?.users ?? []).map((u) => u.id));

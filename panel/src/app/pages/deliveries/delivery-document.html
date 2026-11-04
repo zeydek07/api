@@ -1,0 +1,182 @@
+<div class="no-print mb-4 flex flex-wrap items-center gap-2">
+  <a routerLink="/teslimatlar" class="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-ink">
+    <span class="icon text-[18px]">arrow_back</span> Teslimatlar
+  </a>
+  <span class="flex-1"></span>
+  @if (d(); as doc) {
+    @if (doc.status === 'completed' && auth.can('deliveries.cancel')) {
+      <button class="btn btn-ghost text-danger" (click)="cancel()"><span class="icon">block</span> İptal et</button>
+    }
+    <button class="btn btn-secondary" (click)="print()"><span class="icon">print</span> Yazdır / PDF</button>
+  }
+</div>
+
+@if (notFound()) {
+  <div class="card mx-auto max-w-lg px-6 py-12 text-center">
+    <span class="icon text-[40px] text-muted">search_off</span>
+    <p class="mt-2 font-medium">Belge bulunamadı ya da görme yetkiniz yok.</p>
+  </div>
+} @else if (d(); as doc) {
+  <article class="document card relative mx-auto max-w-4xl overflow-hidden p-6 sm:p-10">
+    @if (doc.status === 'cancelled') {
+      <div class="pointer-events-none absolute inset-0 grid place-items-center" aria-hidden="true">
+        <span class="-rotate-12 rounded-xl border-4 border-danger/40 px-8 py-2 text-6xl font-black tracking-widest text-danger/25">İPTAL</span>
+      </div>
+    }
+
+    <!-- Başlık -->
+    <header class="flex flex-wrap items-start justify-between gap-6 border-b border-line pb-6">
+      <div class="flex items-center gap-3">
+        <div class="grid size-11 place-items-center rounded-xl bg-primary-soft text-primary-ink">
+          <span class="icon">medical_services</span>
+        </div>
+        <div>
+          <div class="text-lg font-semibold">Medikal Stok</div>
+          <div class="text-sm text-muted">{{ doc.type === 'return' ? 'Konsinye Geri Alma Belgesi' : 'Konsinye Teslim Belgesi' }}</div>
+        </div>
+      </div>
+      <div class="text-right">
+        <div class="font-mono text-xl font-semibold">{{ doc.number }}</div>
+        <div class="text-sm text-muted">{{ doc.delivered_at | date: 'dd.MM.yyyy HH:mm' }}</div>
+        @if (doc.status === 'cancelled') {
+          <span class="badge badge-danger mt-1">İptal edildi</span>
+        }
+      </div>
+    </header>
+
+    @if (doc.status === 'cancelled') {
+      <div class="mt-6 rounded-xl bg-danger-soft p-4 text-sm text-danger">
+        <strong>İptal:</strong> {{ doc.cancelled_at | date: 'dd.MM.yyyy HH:mm' }} · {{ doc.canceller?.name }} — {{ doc.cancel_reason }}
+      </div>
+    }
+
+    <!-- Taraflar -->
+    <section class="mt-6 grid gap-6 sm:grid-cols-2">
+      <div>
+        <h2 class="doc-label">Hastane</h2>
+        <div class="font-semibold">{{ doc.hospital?.name }}</div>
+        <div class="text-sm text-muted">
+          {{ doc.hospital?.address || [doc.hospital?.district, doc.hospital?.city].join(', ') }}
+        </div>
+        <div class="mt-1 text-sm">
+          <span class="text-muted">Lokasyon:</span> {{ doc.location?.name }}
+        </div>
+      </div>
+      <div>
+        <h2 class="doc-label">{{ doc.type === 'return' ? 'Teslim eden (hastane)' : 'Teslim alan (hastane)' }}</h2>
+        <div class="font-semibold">{{ doc.receiver_name }}</div>
+        @if (doc.receiver_title) {
+          <div class="text-sm text-muted">{{ doc.receiver_title }}</div>
+        }
+        @if (doc.contact?.phone) {
+          <div class="text-sm text-muted">{{ doc.contact?.phone }}</div>
+        }
+      </div>
+      <div>
+        <h2 class="doc-label">{{ doc.type === 'return' ? 'Teslim alan (firma)' : 'Teslim eden (firma)' }}</h2>
+        <div class="font-semibold">{{ doc.user?.name }}</div>
+        <div class="text-sm text-muted">{{ doc.user?.email }}</div>
+      </div>
+      <div>
+        <h2 class="doc-label">{{ doc.type === 'return' ? 'Ürünlerin gittiği yer' : 'Ürünlerin çıktığı yer' }}</h2>
+        <div class="font-semibold">{{ doc.vehicle?.name }}</div>
+        @if (mapUrl(); as url) {
+          <a [href]="url" target="_blank" rel="noopener" class="no-print text-sm text-primary-ink hover:underline">
+            <span class="icon text-[14px] align-middle">location_on</span> İşlem konumunu haritada aç
+          </a>
+          <div class="hidden text-sm text-muted print:block">Konum: {{ doc.latitude }}, {{ doc.longitude }}</div>
+        }
+      </div>
+    </section>
+
+    <!-- Ürünler -->
+    <section class="mt-8">
+      <h2 class="doc-label">Ürünler</h2>
+      <div class="table-wrap rounded-xl border border-line">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Ürün</th>
+              <th>Karekod (GTIN)</th>
+              <th>Lot / Seri</th>
+              <th>SKT</th>
+              <th class="num">Adet</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (l of doc.lines ?? []; track l.id) {
+              <tr>
+                <td>
+                  <div class="cell-title">{{ l.product?.name }}</div>
+                  <div class="cell-sub font-mono">{{ l.product?.code }}</div>
+                </td>
+                <td class="font-mono text-[13px]">{{ $any(l.product)?.gtin || '—' }}</td>
+                <td class="font-mono text-[13px]">
+                  @if (l.serial_number) {
+                    <div>SN {{ l.serial_number }}</div>
+                  }
+                  @if (l.lot_number) {
+                    <div [class.cell-sub]="l.serial_number">LOT {{ l.lot_number }}</div>
+                  }
+                </td>
+                <td><app-expiry-badge [date]="l.expiry_date" [compact]="true" /></td>
+                <td class="num font-semibold">{{ qty(l.quantity) }}<span class="ms-1 font-normal text-muted">{{ l.product?.unit }}</span></td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr class="bg-surface-2">
+              <td colspan="4" class="font-semibold text-ink">Toplam · {{ doc.lines?.length }} kalem</td>
+              <td class="num font-semibold text-ink">{{ qty(units()) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    @if (doc.note) {
+      <section class="mt-6">
+        <h2 class="doc-label">Not</h2>
+        <p class="text-sm">{{ doc.note }}</p>
+      </section>
+    }
+
+    <!-- Kanıt -->
+    <section class="mt-8 grid gap-6 sm:grid-cols-2">
+      <div>
+        <h2 class="doc-label">İmza</h2>
+        @if (signatureUrl(); as s) {
+          <img [src]="s" alt="Teslim alanın imzası" class="h-36 w-full rounded-xl border border-line bg-white object-contain" />
+        } @else {
+          <div class="grid h-36 place-items-center rounded-xl border border-dashed border-line text-sm text-muted">
+            {{ doc.has_signature ? 'Yükleniyor…' : 'İmza alınmadı' }}
+          </div>
+        }
+        <div class="mt-1 text-center text-xs text-muted">{{ doc.receiver_name }}</div>
+      </div>
+      @if (doc.has_photo) {
+        <div>
+          <h2 class="doc-label">Fotoğraf</h2>
+          @if (photoUrl(); as p) {
+            <img [src]="p" alt="Teslimat fotoğrafı" class="h-36 w-full rounded-xl border border-line object-cover" />
+          }
+        </div>
+      }
+    </section>
+
+    @if (doc.type === 'delivery') {
+      <p class="mt-8 rounded-xl bg-surface-2 p-4 text-xs text-muted">
+        Bu belgede yer alan ürünler hastaneye <strong>konsinye</strong> olarak bırakılmıştır; mülkiyet firmada kalır.
+        Ürünler vakada kullanıldığında faturalandırılır, kullanılmayanlar geri alınır.
+      </p>
+    }
+    <footer class="mt-6 text-center text-[11px] text-muted">
+      Belge sistem tarafından oluşturulmuştur · {{ doc.number }} · Kayıt saati {{ doc.delivered_at | date: 'dd.MM.yyyy HH:mm:ss' }}
+      @if (doc.device_time) {
+        · Cihaz saati {{ doc.device_time | date: 'dd.MM.yyyy HH:mm:ss' }}
+      }
+    </footer>
+  </article>
+} @else {
+  <div class="card mx-auto h-96 max-w-4xl p-10"><div class="skeleton h-full"></div></div>
+}

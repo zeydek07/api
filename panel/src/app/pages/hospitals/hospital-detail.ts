@@ -7,7 +7,8 @@ import { RouterLink } from '@angular/router';
 import { API_URL, qty, toParams } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
 import { CanDirective } from '../../core/can.directive';
-import { HOSPITAL_LABELS, Hospital, Movement } from '../../core/models';
+import { ConsignmentLocation, HOSPITAL_LABELS, Hospital, Movement } from '../../core/models';
+import { HospitalConsignmentTab, HospitalContactsTab, HospitalDeliveriesTab, HospitalLocationsTab } from './hospital-tabs';
 import { openModal } from '../../ui/modal';
 import { HospitalDialog } from './hospital-dialog';
 
@@ -26,7 +27,16 @@ function isoDate(d: Date): string {
 
 /** Hastane kartı: bilgiler + bu hastaneye kim, ne zaman, hangi ürünü verdi */
 @Component({
-  imports: [DatePipe, FormsModule, RouterLink, CanDirective],
+  imports: [
+    DatePipe,
+    FormsModule,
+    RouterLink,
+    CanDirective,
+    HospitalConsignmentTab,
+    HospitalDeliveriesTab,
+    HospitalContactsTab,
+    HospitalLocationsTab,
+  ],
   templateUrl: './hospital-detail.html',
 })
 export class HospitalDetailPage {
@@ -40,6 +50,20 @@ export class HospitalDetailPage {
   protected readonly qty = qty;
 
   protected readonly data = signal<Detail | null>(null);
+
+  protected readonly tabs = [
+    { key: 'konsinye', label: 'Konsinye stok', icon: 'inventory_2' },
+    { key: 'teslimatlar', label: 'Teslimatlar', icon: 'receipt_long' },
+    { key: 'kisiler', label: 'Hastane personeli', icon: 'group' },
+    { key: 'lokasyonlar', label: 'Lokasyonlar', icon: 'shelves' },
+    { key: 'kullanim', label: 'Kullanım geçmişi', icon: 'history' },
+  ];
+  protected readonly tab = signal('konsinye');
+  protected readonly allLocations = signal<ConsignmentLocation[]>([]);
+  protected readonly locations = computed(() => this.allLocations().filter((l) => l.is_active));
+
+  /** Lokasyon sekmesinde değişiklik olunca listeyi yenile */
+  protected readonly reloadLocations = () => this.loadLocations();
   protected readonly loading = signal(false);
   protected from = isoDate(new Date(Date.now() - 89 * 86400000));
   protected to = isoDate(new Date());
@@ -55,6 +79,7 @@ export class HospitalDetailPage {
     effect(() => {
       this.id();
       this.load();
+      this.loadLocations();
     });
   }
 
@@ -69,6 +94,12 @@ export class HospitalDetailPage {
         },
         error: () => this.loading.set(false),
       });
+  }
+
+  private loadLocations(): void {
+    this.http
+      .get<ConsignmentLocation[]>(`${API_URL}/hospitals/${this.id()}/locations`)
+      .subscribe((l) => this.allLocations.set(l));
   }
 
   protected edit(): void {

@@ -7,7 +7,7 @@ import { debounceTime, merge } from 'rxjs';
 import { API_URL, qty, toParams } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
 import { CanDirective } from '../../core/can.directive';
-import { Page, Stock, WAREHOUSE_LABELS, Warehouse } from '../../core/models';
+import { Page, Stock, WAREHOUSE_LABELS, Warehouse, placeName } from '../../core/models';
 import { EXPIRY_CRITICAL_DAYS, EXPIRY_WARNING_DAYS, ExpiryBadge } from '../../ui/expiry-badge';
 import { openModal } from '../../ui/modal';
 import { Pagination } from '../../ui/pagination';
@@ -35,6 +35,7 @@ export class StockPage implements OnInit {
   protected readonly loading = signal(false);
   protected readonly labels: Record<string, string> = WAREHOUSE_LABELS;
   protected readonly qty = qty;
+  protected readonly place = placeName;
 
   protected readonly warehouseId = new FormControl<string>('', { nonNullable: true });
   protected readonly q = new FormControl('', { nonNullable: true });
@@ -54,7 +55,9 @@ export class StockPage implements OnInit {
       .subscribe(() => this.reset());
     // Depo listesi için warehouses.view gerekir; yoksa tüm depoların stoğu listelenir.
     if (this.auth.can('warehouses.view')) {
-      this.http.get<Warehouse[]>(`${API_URL}/warehouses`).subscribe((w) => this.warehouses.set(w));
+      this.http
+        .get<Warehouse[]>(`${API_URL}/warehouses`, { params: { include_consignment: 1 } })
+        .subscribe((w) => this.warehouses.set(w));
     }
   }
 

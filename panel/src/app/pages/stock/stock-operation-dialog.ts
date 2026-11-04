@@ -33,7 +33,8 @@ export class StockOperationDialog {
   private readonly toast = inject(ToastService);
 
   protected readonly isReceive = this.data.mode === 'receive';
-  protected readonly activeWarehouses = this.data.warehouses.filter((w) => w.is_active);
+  // Hastaneye bırakma/geri alma imzalı teslimatla yapılır; burada yalnızca firma depoları
+  protected readonly activeWarehouses = this.data.warehouses.filter((w) => w.is_active && w.type !== 'consignment');
 
   protected warehouseId: number | null = this.data.warehouseId;
   protected toWarehouseId: number | null = null;

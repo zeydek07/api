@@ -10,7 +10,7 @@ import { openModal } from '../../ui/modal';
 import { ToastService } from '../../ui/toast';
 import { WarehouseDialog } from './warehouse-dialog';
 
-const TYPE_ICONS: Record<WarehouseType, string> = { central: 'warehouse', branch: 'store', field: 'local_shipping' };
+const TYPE_ICONS: Record<WarehouseType, string> = { consignment: 'shelves', central: 'warehouse', branch: 'store', field: 'local_shipping' };
 
 @Component({
   imports: [RouterLink, CanDirective],

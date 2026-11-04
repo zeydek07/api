@@ -69,7 +69,8 @@ class HospitalTest extends ApiTestCase
         $this->assertEquals(5, $rows[0]['total_quantity']);
 
         $list = $this->withToken($token)->getJson('/api/hospitals')->assertOk();
-        $this->assertSame(2, $list->json('data.0.deliveries_30d'));
+        // Listedeki sayaç konsinye teslimat belgelerini sayar; kullanım kayıtları sayılmaz
+        $this->assertSame(0, $list->json('data.0.deliveries_30d'));
 
         $this->withToken($token)->getJson("/api/movements?hospital_id={$hospital->id}")->assertOk()->assertJsonPath('total', 2);
     }

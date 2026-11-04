@@ -147,6 +147,39 @@ POST /api/users
 }
 ```
 
+### Konsinye teslimat (yetki: `deliveries.create`, iptal: `deliveries.cancel`)
+
+Stok **lot / seri / SKT** bazında tutulur. Ürünün takip türü: `lot`, `serial` (her birim tek) ya da `none`.
+Lot verilmeyen çıkışlarda SKT'si en yakın lot önce kullanılır; SKT'si geçmiş ürün hastaneye bırakılamaz.
+
+| Yöntem | Adres | Açıklama |
+|---|---|---|
+| GET | `/api/hospitals/{id}/locations` | Hastanenin konsinye lokasyonları (yeni hastanede otomatik "Ana konsinye deposu") |
+| GET/POST | `/api/hospitals/{id}/contacts` | Hastane personeli (teslim alan); teslimat sırasında da eklenebilir |
+| GET | `/api/hospitals/{id}/consignment?location_id=` | Hastanedeki konsinye ürünler (lot/seri/SKT) ve özet |
+| GET | `/api/mobile/warehouses/{id}/stock` | Aracımdaki stok satırları (teslimatta `stock_id` buradan) |
+| POST | `/api/deliveries` | Teslim (`type: delivery`, araç → hastane) ya da geri alma (`type: return`, hastane → araç) |
+| GET | `/api/deliveries?hospital_id=&type=&from=&to=` | Belgeler (kendi / ekip / herkes, yetkiye göre) |
+| GET | `/api/deliveries/{id}` · `/{id}/signature` · `/{id}/photo` | Belge, imza ve fotoğraf |
+| POST | `/api/deliveries/{id}/cancel` | `{reason}` — ürünler geri taşınır; ürün yerinde değilse iptal edilemez |
+
+```json
+POST /api/deliveries
+Idempotency-Key: 6c1e2f9a-...
+{
+  "type": "delivery",
+  "hospital_id": 1, "location_id": 11, "vehicle_id": 2,
+  "contact_id": 3,                          // ya da "receiver_name": "Nöbetçi hemşire"
+  "items": [{ "stock_id": 57, "quantity": 2 }],
+  "signature": "data:image/png;base64,...", // teslimde zorunlu
+  "photo": "data:image/jpeg;base64,...",    // isteğe bağlı
+  "latitude": 40.9067, "longitude": 29.1836,
+  "device_time": "2026-11-04T20:21:07Z"
+}
+```
+
+Hastaneye düz transfer ya da stok girişi yapılamaz; konsinye yalnızca imzalı teslimat belgesiyle değişir.
+
 ### Hata yanıtları
 | Kod | Anlamı |
 |---|---|

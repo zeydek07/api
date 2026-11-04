@@ -7,7 +7,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { debounceTime, merge } from 'rxjs';
-import { API_URL, errorMessage, toParams } from '../../core/api';
+import { API_URL, errorMessage, qty, toParams } from '../../core/api';
 import { CanDirective } from '../../core/can.directive';
 import { HOSPITAL_LABELS, HOSPITAL_TYPES, Hospital, Page } from '../../core/models';
 import { ProvinceService } from '../../core/province.service';
@@ -43,6 +43,7 @@ export class HospitalsPage {
   protected readonly loading = signal(false);
   protected readonly typeLabels: Record<string, string> = HOSPITAL_LABELS;
   protected readonly types = HOSPITAL_TYPES;
+  protected readonly qty = qty;
 
   protected readonly q = new FormControl('', { nonNullable: true });
   protected readonly city = new FormControl('', { nonNullable: true });

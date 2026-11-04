@@ -4,7 +4,8 @@ import { Component, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { API_URL, errorMessage } from '../../core/api';
-import { HOSPITAL_LABELS, HOSPITAL_TYPES, Hospital, HospitalType } from '../../core/models';
+import { AuthService } from '../../core/auth.service';
+import { HOSPITAL_LABELS, HOSPITAL_TYPES, Hospital, HospitalType, Page, User } from '../../core/models';
 import { ProvinceService } from '../../core/province.service';
 import { SearchSelect, SelectOption } from '../../ui/search-select';
 import { ModalFrame } from '../../ui/modal-frame';
@@ -58,6 +59,20 @@ import { ToastService } from '../../ui/toast';
             <label class="label" for="h-address">Adres</label>
             <input id="h-address" class="input" formControlName="address" />
           </div>
+          @if (canPickResponsible) {
+            <div class="sm:col-span-2">
+              <label class="label" for="h-resp">Sorumlu mümessil (firma personeli)</label>
+              <app-search-select
+                inputId="h-resp"
+                formControlName="responsible_user_id"
+                [options]="staff()"
+                placeholder="Atanmamış"
+                searchPlaceholder="Personel ara"
+                [clearable]="true"
+              />
+              <p class="hint">Bu hastaneye bakan kişi. Teslimat ekranında hastane onun listesinde önce çıkar.</p>
+            </div>
+          }
           <div class="sm:col-span-2">
             <label class="label" for="h-notes">Notlar</label>
             <textarea id="h-notes" class="textarea" rows="3" formControlName="notes"></textarea>
@@ -98,6 +113,7 @@ export class HospitalDialog {
     city: [this.h?.city ?? ''],
     district: [this.h?.district ?? ''],
     address: [this.h?.address ?? ''],
+    responsible_user_id: [this.h?.responsible_user_id ? String(this.h.responsible_user_id) : ''],
     notes: [this.h?.notes ?? ''],
     is_active: [this.h?.is_active ?? true],
   });
@@ -111,7 +127,17 @@ export class HospitalDialog {
   protected readonly districts = signal<SelectOption[]>([]);
   protected readonly districtsLoading = signal(false);
 
+  // Sorumlu mümessil seçimi için personel listesi (personeli görme yetkisi gerekir)
+  protected readonly canPickResponsible = inject(AuthService).can('users.view');
+  protected readonly staff = signal<SelectOption[]>([]);
+
   constructor() {
+    if (this.canPickResponsible) {
+      this.http
+        .get<Page<User>>(`${API_URL}/users`, { params: { per_page: 100, is_active: 1 } })
+        .subscribe((p) => this.staff.set(p.data.map((u) => ({ value: String(u.id), label: u.name }))));
+    }
+
     // Kullanıcı ili değiştirince eski ilçe geçersiz olur; temizle
     this.form.controls.city.valueChanges
       .pipe(takeUntilDestroyed())
@@ -141,9 +167,14 @@ export class HospitalDialog {
     this.saving.set(true);
     this.error.set('');
     // Boş metinleri null gönder (benzersiz kod kontrolü boş metne takılmasın)
-    const body = Object.fromEntries(
+    const body: Record<string, unknown> = Object.fromEntries(
       Object.entries(this.form.getRawValue()).map(([k, v]) => [k, v === '' ? null : v]),
     );
+    if (this.canPickResponsible) {
+      body['responsible_user_id'] = body['responsible_user_id'] ? Number(body['responsible_user_id']) : null;
+    } else {
+      delete body['responsible_user_id'];
+    }
     const req = this.h
       ? this.http.put(`${API_URL}/hospitals/${this.h.id}`, body)
       : this.http.post(`${API_URL}/hospitals`, body);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Delivery;
 use App\Models\Hospital;
 use App\Models\Stock;
 use App\Models\StockMovement;
@@ -27,11 +28,12 @@ class HospitalController extends Controller
                 ->where('warehouses.type', Warehouse::TYPE_CONSIGNMENT)
                 ->where('stocks.quantity', '>', 0)])
             ->with('responsible:id,name')
-            // Son 30 günde bu hastaneye yapılan teslimat kaydı sayısı
-            ->withCount(['movements as deliveries_30d' => fn ($q) => $q
-                ->where('type', StockMovement::TYPE_USAGE)
-                ->where('created_at', '>=', $since)])
-            ->withMax(['movements as last_delivery_at' => fn ($q) => $q->where('type', StockMovement::TYPE_USAGE)], 'created_at')
+            // Son 30 günde bu hastaneye yapılan konsinye teslimat belgesi sayısı ve son teslimat
+            ->withCount(['deliveries as deliveries_30d' => fn ($q) => $q
+                ->where('type', Delivery::TYPE_DELIVERY)->where('status', Delivery::STATUS_COMPLETED)
+                ->where('delivered_at', '>=', $since)])
+            ->withMax(['deliveries as last_delivery_at' => fn ($q) => $q
+                ->where('type', Delivery::TYPE_DELIVERY)->where('status', Delivery::STATUS_COMPLETED)], 'delivered_at')
             ->when($request->filled('q'), fn ($q) => $q->where(fn ($w) => $w
                 ->where('name', 'like', '%'.$request->q.'%')
                 ->orWhere('code', 'like', '%'.$request->q.'%')

@@ -1,257 +1,460 @@
-<div class="page-head">
-  <div class="flex-1">
-    <h1 class="page-title">Hastaneye Teslim</h1>
-    <p class="page-sub">Hastaneyi seçin, verdiğiniz ürünlerin miktarını girin. Kayıt sizin adınıza tutulur ve stoktan düşülür.</p>
-  </div>
-</div>
-
-@if (warehouses() !== null && warehouses()!.length === 0) {
-  <div class="card mx-auto max-w-lg px-6 py-12 text-center">
-    <span class="icon text-[40px] text-warn">no_backpack</span>
-    <p class="mt-3 font-medium">Size atanmış bir depo yok</p>
-    <p class="mt-1 text-sm text-muted">Ürün düşebilmek için yöneticinizin size bir depo (ör. araç / çanta) ataması gerekiyor.</p>
+@if (done(); as d) {
+  <!-- Kayıt tamamlandı -->
+  <div class="card mx-auto mt-4 max-w-xl p-8 text-center">
+    <div class="mx-auto grid size-14 place-items-center rounded-full bg-ok-soft text-ok">
+      <span class="icon text-[30px]">task_alt</span>
+    </div>
+    <h1 class="mt-4 text-xl font-semibold">{{ d.type === 'return' ? 'Geri alma kaydedildi' : 'Teslimat kaydedildi' }}</h1>
+    <p class="mt-1 font-mono text-lg text-primary-ink">{{ d.number }}</p>
+    <p class="mt-3 text-sm text-muted">
+      {{ d.hospital?.name }} · {{ d.location?.name }} ·
+      {{ lines().length }} kalem / {{ qty(totalUnits()) }} adet.
+      {{ d.type === 'return' ? 'Ürünler aracınıza geçti.' : 'Ürünler hastanenin konsinye stoğuna geçti.' }}
+    </p>
+    <div class="mt-6 flex flex-wrap justify-center gap-2">
+      <a class="btn btn-secondary" [routerLink]="['/teslimatlar', d.id]"><span class="icon">description</span> Belgeyi görüntüle</a>
+      <button class="btn btn-primary" (click)="startNew()"><span class="icon">add</span> Yeni belge</button>
+    </div>
   </div>
 } @else {
-  <div class="grid items-start gap-6 xl:grid-cols-[1fr_380px]">
-    <div class="space-y-6">
-      <!-- 1. Hastane -->
-      <section class="card">
-        <div class="card-head">
-          <span class="grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-white dark:text-slate-950">1</span>
-          <h2 class="card-title flex-1">Hastane</h2>
-          @if (hospital()) {
-            <button class="btn btn-ghost btn-sm" (click)="hospital.set(null)">Değiştir</button>
-          }
-        </div>
-        @if (hospital(); as h) {
-          <div class="flex items-center gap-3 p-5">
-            <div class="grid size-10 place-items-center rounded-xl bg-primary-soft text-primary-ink">
-              <span class="icon">local_hospital</span>
-            </div>
-            <div>
-              <div class="font-semibold text-ink">{{ h.name }}</div>
-              <div class="text-sm text-muted">{{ h.district ? h.district + ', ' : '' }}{{ h.city }}</div>
-            </div>
-            <span class="icon ml-auto text-ok">check_circle</span>
-          </div>
-        } @else {
-          <div class="p-4">
-            <div class="relative mb-3">
-              <span class="icon pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-muted">search</span>
-              <input
-                class="input pl-9"
-                placeholder="Hastane, il veya ilçe ara"
-                aria-label="Hastane ara"
-                [ngModel]="hospitalQuery()"
-                (ngModelChange)="hospitalQuery.set($event)"
-              />
-            </div>
-            <div class="grid max-h-80 gap-2 overflow-y-auto sm:grid-cols-2">
-              @for (h of filteredHospitals(); track h.id) {
-                <button
-                  class="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5 text-left transition hover:border-primary hover:bg-primary-soft"
-                  (click)="hospital.set(h)"
-                >
-                  <span class="icon text-muted">domain</span>
-                  <span class="min-w-0">
-                    <span class="block truncate text-sm font-medium text-ink">{{ h.name }}</span>
-                    <span class="block text-xs text-muted">{{ h.district ? h.district + ', ' : '' }}{{ h.city }}</span>
-                  </span>
-                </button>
-              } @empty {
-                <p class="col-span-full py-6 text-center text-sm text-muted">Hastane bulunamadı.</p>
-              }
-            </div>
-          </div>
-        }
-      </section>
-
-      <!-- 2. Ürünler -->
-      <section class="card">
-        <div class="card-head flex-wrap">
-          <span class="grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-white dark:text-slate-950">2</span>
-          <h2 class="card-title flex-1">Verilen ürünler</h2>
-          @if ((warehouses()?.length ?? 0) > 1) {
-            <select
-              class="select w-56"
-              aria-label="Çıkış deposu"
-              [ngModel]="warehouseId()"
-              (ngModelChange)="selectWarehouse($event)"
-            >
-              <option [ngValue]="null" disabled>Çıkış deposu seçin</option>
-              @for (w of warehouses(); track w.id) {
-                <option [ngValue]="w.id">{{ w.name }}</option>
-              }
-            </select>
-          } @else if (warehouses()?.length === 1) {
-            <span class="badge"><span class="icon text-[14px]">local_shipping</span>{{ warehouses()![0].name }}</span>
-          }
-        </div>
-
-        @if (!warehouseId()) {
-          <p class="px-5 py-10 text-center text-sm text-muted">Önce ürünlerin çıkacağı depoyu seçin.</p>
-        } @else {
-          <div class="border-b border-line p-4">
-            <div class="relative">
-              <span class="icon pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-muted">search</span>
-              <input
-                class="input pl-9"
-                placeholder="Ürün adı, kodu veya barkodu"
-                aria-label="Ürün ara"
-                [ngModel]="productQuery()"
-                (ngModelChange)="productQuery.set($event)"
-              />
-            </div>
-          </div>
-          @if (stockLoading()) {
-            <div class="loading-bar"></div>
-          }
-          <ul class="max-h-[460px] divide-y divide-line overflow-y-auto">
-            @for (s of filteredStocks(); track s.id) {
-              <li class="flex items-center gap-3 px-5 py-3" [class.bg-primary-soft]="inCart(s) > 0">
-                <div class="min-w-0 flex-1">
-                  <div class="truncate text-sm font-medium text-ink">{{ s.product?.name }}</div>
-                  <div class="text-xs text-muted">
-                    <span class="font-mono">{{ s.product?.code }}</span> · Depoda {{ qty(s.quantity) }} {{ s.product?.unit }}
-                  </div>
-                </div>
-                <div class="flex items-center rounded-lg border border-line bg-surface">
-                  <button
-                    class="grid size-9 place-items-center text-muted hover:text-ink disabled:opacity-30"
-                    [disabled]="inCart(s) <= 0"
-                    (click)="setQty(s, inCart(s) - 1)"
-                    [attr.aria-label]="s.product?.name + ' azalt'"
-                  >
-                    <span class="icon text-[18px]">remove</span>
-                  </button>
-                  <input
-                    class="h-9 w-14 border-x border-line bg-transparent text-center text-sm tabular-nums text-ink focus:outline-none"
-                    type="number"
-                    min="0"
-                    [max]="s.quantity"
-                    [ngModel]="inCart(s) || null"
-                    (ngModelChange)="setQty(s, $event)"
-                    placeholder="0"
-                    [attr.aria-label]="s.product?.name + ' miktar'"
-                  />
-                  <button
-                    class="grid size-9 place-items-center text-muted hover:text-ink disabled:opacity-30"
-                    [disabled]="inCart(s) >= +s.quantity"
-                    (click)="setQty(s, inCart(s) + 1)"
-                    [attr.aria-label]="s.product?.name + ' artır'"
-                  >
-                    <span class="icon text-[18px]">add</span>
-                  </button>
-                </div>
-              </li>
-            } @empty {
-              @if (!stockLoading()) {
-                <li class="px-5 py-10 text-center text-sm text-muted">
-                  {{ productQuery() ? 'Aramaya uyan ürün yok.' : 'Bu depoda stok yok.' }}
-                </li>
-              }
-            }
-          </ul>
-        }
-      </section>
+  <div class="page-head">
+    <div class="flex-1">
+      <h1 class="page-title">Hastaneye Teslim</h1>
+      <p class="page-sub">
+        Ürünler hastanede konsinye olarak bekler, mülkiyet firmada kalır. Kayıt sizin adınıza tutulur, imzalı belge oluşur.
+      </p>
     </div>
-
-    <!-- 3. Özet -->
-    <aside class="card xl:sticky xl:top-24">
-      <div class="card-head">
-        <span class="grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-white dark:text-slate-950">3</span>
-        <h2 class="card-title flex-1">Özet ve kayıt</h2>
-      </div>
-      <div class="space-y-4 p-5">
-        <div class="rounded-lg bg-surface-2 p-3 text-sm">
-          <div class="text-xs text-muted">Hastane</div>
-          <div class="font-medium" [class.text-ink]="hospital()" [class.text-muted]="!hospital()">
-            {{ hospital()?.name ?? 'Seçilmedi' }}
-          </div>
-        </div>
-
-        <div>
-          <div class="mb-2 flex items-center justify-between text-sm">
-            <span class="font-medium text-ink">Ürünler</span>
-            <span class="text-muted">{{ lines().length }} kalem</span>
-          </div>
-          <ul class="space-y-2">
-            @for (l of lines(); track l.stock.product_id) {
-              <li class="rounded-lg border border-line p-2.5">
-                <div class="flex items-start justify-between gap-2 text-sm">
-                  <span class="text-ink">{{ l.stock.product?.name }}</span>
-                  <span class="shrink-0 font-semibold tabular-nums text-ink">{{ qty(l.quantity) }} {{ l.stock.product?.unit }}</span>
-                </div>
-                <input
-                  class="input mt-2 h-8 text-xs"
-                  placeholder="Lot no (isteğe bağlı)"
-                  aria-label="Lot numarası"
-                  [ngModel]="l.lot_number"
-                  (ngModelChange)="setLot(l, $event)"
-                />
-              </li>
-            } @empty {
-              <li class="rounded-lg border border-dashed border-line p-4 text-center text-sm text-muted">
-                Soldan ürün miktarı girin.
-              </li>
-            }
-          </ul>
-        </div>
-
-        <div>
-          <label class="label" for="d-ref">Teslim fişi / referans no</label>
-          <input id="d-ref" class="input" [(ngModel)]="reference" />
-        </div>
-        <div>
-          <label class="label" for="d-note">Not</label>
-          <textarea id="d-note" class="textarea" rows="2" [(ngModel)]="note" placeholder="ör. Ameliyathane sorumlusuna teslim edildi"></textarea>
-        </div>
-
-        @if (error()) {
-          <p class="form-error">{{ error() }}</p>
-        }
-
-        <button class="btn btn-primary h-11 w-full" [disabled]="!canSave()" (click)="save()">
-          @if (saving()) {
-            <span class="icon animate-spin">progress_activity</span>
-          } @else {
-            <span class="icon">check</span>
-          }
-          Teslimatı kaydet ve stoktan düş
-        </button>
-        @if (!hospital() || !lines().length) {
-          <p class="text-center text-xs text-muted">
-            {{ !hospital() ? 'Hastane seçin' : 'En az bir ürün girin' }}
-          </p>
-        }
-      </div>
-    </aside>
+    <!-- Teslim et / Geri al -->
+    <div class="inline-flex rounded-xl border border-line bg-surface p-1" role="tablist" aria-label="İşlem türü">
+      <button
+        role="tab"
+        class="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition"
+        [class]="!isReturn() ? 'bg-primary text-white shadow-sm dark:text-slate-950' : 'text-muted hover:text-ink'"
+        [attr.aria-selected]="!isReturn()"
+        (click)="setMode('delivery')"
+      >
+        <span class="icon text-[18px]">move_to_inbox</span> Teslim et
+      </button>
+      <button
+        role="tab"
+        class="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition"
+        [class]="isReturn() ? 'bg-warn text-white shadow-sm dark:text-slate-950' : 'text-muted hover:text-ink'"
+        [attr.aria-selected]="isReturn()"
+        (click)="setMode('return')"
+      >
+        <span class="icon text-[18px]">undo</span> Hastaneden geri al
+      </button>
+    </div>
   </div>
 
-  <!-- Son teslimatlarım -->
-  <section class="card mt-6">
-    <div class="card-head">
-      <h2 class="card-title flex-1">Son teslimatlarım</h2>
+  @if (vehicles() !== null && vehicles()!.length === 0) {
+    <div class="card mx-auto max-w-lg px-6 py-12 text-center">
+      <span class="icon text-[40px] text-warn">no_crash</span>
+      <p class="mt-3 font-medium">Size atanmış bir araç / depo yok</p>
+      <p class="mt-1 text-sm text-muted">Teslimat yapabilmek için yöneticinizin size bir araç ya da depo ataması gerekiyor.</p>
     </div>
-    <ul class="divide-y divide-line">
-      @for (g of recent(); track g.batch) {
-        <li class="flex flex-wrap items-start gap-x-6 gap-y-2 px-5 py-3.5">
-          <div class="w-36 shrink-0">
-            <div class="text-sm text-ink">{{ g.at | date: 'dd.MM.yyyy' }}</div>
-            <div class="text-xs text-muted">{{ g.at | date: 'HH:mm' }} · {{ g.warehouse }}</div>
+  } @else {
+    <div class="grid items-start gap-6 xl:grid-cols-[1fr_400px]">
+      <div class="space-y-6">
+        <!-- 1. Hastane -->
+        <section class="card">
+          <div class="card-head">
+            <span class="step" [class.step-done]="hospital()">1</span>
+            <h2 class="card-title flex-1">Hastane</h2>
+            @if (hospital()) {
+              <button class="btn btn-ghost btn-sm" (click)="selectHospital(null)">Değiştir</button>
+            }
           </div>
-          <div class="min-w-48 flex-1">
-            <div class="text-sm font-medium text-ink">{{ g.hospital }}</div>
-            <div class="mt-1 flex flex-wrap gap-1.5">
-              @for (m of g.lines; track m.id) {
-                <span class="badge">{{ m.product?.name }} · {{ qty(m.quantity, true) }} {{ m.product?.unit }}</span>
+          @if (hospital(); as h) {
+            <div class="flex items-center gap-3 p-5">
+              <div class="grid size-10 place-items-center rounded-xl bg-primary-soft text-primary-ink">
+                <span class="icon">local_hospital</span>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-ink">{{ h.name }}</div>
+                <div class="text-sm text-muted">{{ h.district ? h.district + ', ' : '' }}{{ h.city }}</div>
+              </div>
+              @if (h.responsible_user_id === auth.user()?.id) {
+                <span class="badge badge-primary">Sorumlu olduğunuz</span>
               }
             </div>
+          } @else {
+            <div class="p-4">
+              <div class="relative mb-3">
+                <span class="icon pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-muted">search</span>
+                <input
+                  class="input pl-9"
+                  placeholder="Hastane, il veya ilçe ara"
+                  aria-label="Hastane ara"
+                  [ngModel]="hospitalQuery()"
+                  (ngModelChange)="hospitalQuery.set($event)"
+                />
+              </div>
+              <div class="grid max-h-80 gap-2 overflow-y-auto sm:grid-cols-2">
+                @for (h of filteredHospitals(); track h.id) {
+                  <button
+                    class="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5 text-left transition hover:border-primary hover:bg-primary-soft"
+                    (click)="selectHospital(h)"
+                  >
+                    <span class="icon" [class]="h.responsible_user_id === auth.user()?.id ? 'text-primary' : 'text-muted'">domain</span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate text-sm font-medium text-ink">{{ h.name }}</span>
+                      <span class="block text-xs text-muted">
+                        {{ h.district ? h.district + ', ' : '' }}{{ h.city }}
+                        @if (+(h.consignment_units ?? 0) > 0) {
+                          · {{ qty(h.consignment_units) }} konsinye
+                        }
+                      </span>
+                    </span>
+                    @if (h.responsible_user_id === auth.user()?.id) {
+                      <span class="icon text-[16px] text-primary" title="Sorumlu olduğunuz hastane">star</span>
+                    }
+                  </button>
+                } @empty {
+                  <p class="col-span-full py-6 text-center text-sm text-muted">Hastane bulunamadı.</p>
+                }
+              </div>
+            </div>
+          }
+        </section>
+
+        @if (hospital()) {
+          <!-- 2. Lokasyon (birden fazlaysa) ve araç -->
+          <section class="card">
+            <div class="card-head">
+              <span class="step" [class.step-done]="location() && vehicle()">2</span>
+              <h2 class="card-title flex-1">{{ isReturn() ? 'Nereden geri alınıyor' : 'Nereye bırakılıyor' }}</h2>
+            </div>
+            <div class="space-y-4 p-5">
+              <div>
+                <span class="label">Hastanedeki lokasyon</span>
+                <div class="flex flex-wrap gap-2">
+                  @for (l of locations(); track l.id) {
+                    <button
+                      class="chip"
+                      [class.chip-on]="location()?.id === l.id"
+                      [attr.aria-pressed]="location()?.id === l.id"
+                      (click)="selectLocation(l)"
+                    >
+                      <span class="icon text-[16px]">shelves</span>{{ l.name }}
+                      @if (+(l.units ?? 0) > 0) {
+                        <span class="opacity-70">· {{ qty(l.units) }}</span>
+                      }
+                    </button>
+                  }
+                </div>
+              </div>
+              <div>
+                <span class="label">{{ isReturn() ? 'Ürünlerin gideceği araç / depo' : 'Ürünlerin çıktığı araç / depo' }}</span>
+                @if ((vehicles()?.length ?? 0) > 1) {
+                  <div class="flex flex-wrap gap-2">
+                    @for (v of vehicles(); track v.id) {
+                      <button class="chip" [class.chip-on]="vehicle()?.id === v.id" (click)="selectVehicle(v)">
+                        <span class="icon text-[16px]">local_shipping</span>{{ v.name }}
+                      </button>
+                    }
+                  </div>
+                } @else if (vehicle()) {
+                  <span class="chip chip-on"><span class="icon text-[16px]">local_shipping</span>{{ vehicle()!.name }}</span>
+                }
+              </div>
+            </div>
+          </section>
+
+          <!-- 3. Teslim alan / teslim eden -->
+          <section class="card">
+            <div class="card-head">
+              <span class="step" [class.step-done]="receiverReady() && (!otherPerson() || otherName.trim())">3</span>
+              <div class="flex-1">
+                <h2 class="card-title">{{ isReturn() ? 'Hastanede teslim eden' : 'Teslim alan' }}</h2>
+                <p class="text-xs text-muted">Hastane personeli · kayıtlı kişiler tekrar kullanılır</p>
+              </div>
+            </div>
+            <div class="space-y-3 p-5">
+              <div class="flex flex-wrap gap-2">
+                @for (c of visibleContacts(); track c.id) {
+                  <button class="chip" [class.chip-on]="contact()?.id === c.id" [attr.aria-pressed]="contact()?.id === c.id" (click)="pickContact(c)">
+                    <span class="icon text-[16px]">person</span>
+                    <span>{{ c.name }}@if (c.title) {<span class="opacity-70"> · {{ c.title }}</span>}</span>
+                  </button>
+                }
+                <button class="chip border-dashed" [class.chip-on]="addingContact()" (click)="addingContact.set(!addingContact()); otherPerson.set(false)">
+                  <span class="icon text-[16px]">person_add</span> Yeni kişi
+                </button>
+                <button class="chip border-dashed" [class.chip-on]="otherPerson()" (click)="useOtherPerson()">
+                  <span class="icon text-[16px]">edit</span> Kayıtsız biri
+                </button>
+              </div>
+
+              @if (contact(); as c) {
+                @if (c.phone) {
+                  <a [href]="'tel:' + c.phone" class="inline-flex items-center gap-1.5 text-sm text-primary-ink hover:underline">
+                    <span class="icon text-[16px]">call</span>{{ c.phone }}
+                  </a>
+                }
+              }
+
+              @if (addingContact()) {
+                <div class="grid gap-3 rounded-xl bg-surface-2 p-4 sm:grid-cols-3">
+                  <div>
+                    <label class="label" for="nc-name">Ad soyad *</label>
+                    <input id="nc-name" class="input" [(ngModel)]="newContact.name" />
+                  </div>
+                  <div>
+                    <label class="label" for="nc-title">Görevi</label>
+                    <input id="nc-title" class="input" [(ngModel)]="newContact.title" placeholder="ör. Sorumlu hemşire" />
+                  </div>
+                  <div>
+                    <label class="label" for="nc-phone">Telefon</label>
+                    <input id="nc-phone" class="input" [(ngModel)]="newContact.phone" />
+                  </div>
+                  <div class="flex justify-end gap-2 sm:col-span-3">
+                    <button class="btn btn-ghost btn-sm" (click)="addingContact.set(false)">Vazgeç</button>
+                    <button class="btn btn-primary btn-sm" [disabled]="!newContact.name.trim()" (click)="saveNewContact()">
+                      Kaydet ve seç
+                    </button>
+                  </div>
+                  <p class="hint sm:col-span-3">Kişi bu hastanenin personel listesine eklenir; sonraki teslimatlarda tek dokunuşla seçilir.</p>
+                </div>
+              }
+
+              @if (otherPerson()) {
+                <div class="grid gap-3 rounded-xl bg-surface-2 p-4 sm:grid-cols-2">
+                  <div>
+                    <label class="label" for="op-name">Ad soyad *</label>
+                    <input id="op-name" class="input" [(ngModel)]="otherName" />
+                  </div>
+                  <div>
+                    <label class="label" for="op-title">Görevi</label>
+                    <input id="op-title" class="input" [(ngModel)]="otherTitle" />
+                  </div>
+                  <p class="hint sm:col-span-2">Yalnızca bu belgeye yazılır, listeye eklenmez.</p>
+                </div>
+              }
+            </div>
+          </section>
+
+          <!-- 4. Ürünler -->
+          <section class="card">
+            <div class="card-head flex-wrap">
+              <span class="step" [class.step-done]="lines().length">4</span>
+              <div class="flex-1">
+                <h2 class="card-title">Ürünler</h2>
+                <p class="text-xs text-muted">
+                  {{ isReturn() ? (location()?.name ?? 'Lokasyon') + ' içindekiler' : (vehicle()?.name ?? 'Araç') + ' içindekiler' }} ·
+                  SKT'si yakın olan önce
+                </p>
+              </div>
+            </div>
+
+            @if (isReturn() ? !location() : !vehicle()) {
+              <p class="px-5 py-10 text-center text-sm text-muted">Önce {{ isReturn() ? 'lokasyonu' : 'aracı' }} seçin.</p>
+            } @else {
+              <div class="grid gap-3 border-b border-line p-4 sm:grid-cols-2">
+                <div class="relative">
+                  <span class="icon pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-primary">qr_code_scanner</span>
+                  <input
+                    class="input pl-9 font-mono"
+                    placeholder="Karekod okutun ve Enter"
+                    aria-label="Karekod okut"
+                    autocomplete="off"
+                    [(ngModel)]="scanText"
+                    (keydown.enter)="$event.preventDefault(); scan()"
+                  />
+                </div>
+                <div class="relative">
+                  <span class="icon pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-muted">search</span>
+                  <input
+                    class="input pl-9"
+                    placeholder="Ürün, lot veya seri ara"
+                    aria-label="Ürün ara"
+                    [ngModel]="productQuery()"
+                    (ngModelChange)="productQuery.set($event)"
+                  />
+                </div>
+                @if (scanMessage(); as m) {
+                  <p class="text-sm sm:col-span-2" [class.text-danger]="m.error" [class.text-ok]="!m.error">{{ m.text }}</p>
+                }
+              </div>
+              @if (rowsLoading()) {
+                <div class="loading-bar"></div>
+              }
+              <ul class="max-h-[520px] divide-y divide-line overflow-y-auto">
+                @for (s of filteredRows(); track s.id) {
+                  <li class="flex flex-wrap items-center gap-3 px-5 py-3" [class.bg-primary-soft]="inCart(s) > 0" [class.opacity-60]="blocked(s)">
+                    <div class="min-w-48 flex-1">
+                      <div class="text-sm font-medium text-ink">{{ s.product?.name }}</div>
+                      <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                        @if (s.serial_number) {
+                          <span class="badge font-mono">SN {{ s.serial_number }}</span>
+                        }
+                        @if (s.lot_number) {
+                          <span class="badge font-mono">LOT {{ s.lot_number }}</span>
+                        }
+                        <app-expiry-badge [date]="s.expiry_date" />
+                        <span>· {{ qty(s.quantity) }} {{ s.product?.unit }} mevcut</span>
+                      </div>
+                      @if (blocked(s)) {
+                        <p class="mt-1 text-xs text-danger">SKT'si geçmiş; hastaneye bırakılamaz.</p>
+                      }
+                    </div>
+                    @if (!blocked(s)) {
+                      @if (+s.quantity > 1 && inCart(s) < +s.quantity) {
+                        <button class="btn btn-ghost btn-sm" (click)="selectAll(s)">Tümü</button>
+                      }
+                      <div class="flex items-center rounded-lg border border-line bg-surface">
+                        <button class="grid size-9 place-items-center text-muted hover:text-ink disabled:opacity-30" [disabled]="inCart(s) <= 0" (click)="setQty(s, inCart(s) - 1)" [attr.aria-label]="s.product?.name + ' azalt'">
+                          <span class="icon text-[18px]">remove</span>
+                        </button>
+                        <input
+                          class="h-9 w-14 border-x border-line bg-transparent text-center text-sm tabular-nums text-ink focus:outline-none"
+                          type="number"
+                          min="0"
+                          [max]="s.quantity"
+                          [ngModel]="inCart(s) || null"
+                          (ngModelChange)="setQty(s, $event)"
+                          placeholder="0"
+                          [attr.aria-label]="s.product?.name + ' miktar'"
+                        />
+                        <button class="grid size-9 place-items-center text-muted hover:text-ink disabled:opacity-30" [disabled]="inCart(s) >= +s.quantity" (click)="setQty(s, inCart(s) + 1)" [attr.aria-label]="s.product?.name + ' artır'">
+                          <span class="icon text-[18px]">add</span>
+                        </button>
+                      </div>
+                    }
+                  </li>
+                } @empty {
+                  @if (!rowsLoading()) {
+                    <li class="px-5 py-10 text-center text-sm text-muted">
+                      {{ productQuery() ? 'Aramaya uyan ürün yok.' : isReturn() ? 'Bu lokasyonda konsinye ürün yok.' : 'Araçta ürün yok.' }}
+                    </li>
+                  }
+                }
+              </ul>
+            }
+          </section>
+
+          <!-- 5. Kanıt -->
+          <section class="card">
+            <div class="card-head">
+              <span class="step" [class.step-done]="isReturn() || signature()">5</span>
+              <div class="flex-1">
+                <h2 class="card-title">Kanıt</h2>
+                <p class="text-xs text-muted">{{ isReturn() ? 'İmza isteğe bağlı' : 'Teslim alanın imzası zorunlu' }}</p>
+              </div>
+            </div>
+            <div class="space-y-4 p-5">
+              <div>
+                <span class="label">İmza {{ isReturn() ? '(isteğe bağlı)' : '*' }}</span>
+                <app-signature-pad (signed)="signature.set($event)" />
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <span class="label">Fotoğraf (isteğe bağlı)</span>
+                  @if (photo(); as p) {
+                    <div class="relative overflow-hidden rounded-xl border border-line">
+                      <img [src]="p" alt="Teslimat fotoğrafı" class="h-32 w-full object-cover" />
+                      <button class="btn-icon absolute right-1 top-1 bg-surface/90" (click)="photo.set(null)" aria-label="Fotoğrafı kaldır">
+                        <span class="icon">close</span>
+                      </button>
+                    </div>
+                  } @else {
+                    <label class="flex h-32 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line text-sm text-muted hover:border-primary hover:text-ink">
+                      <span class="icon text-[28px]">photo_camera</span>
+                      Kaşeli irsaliye, dolap vb.
+                      <input type="file" accept="image/*" capture="environment" class="sr-only" (change)="onPhoto($event)" />
+                    </label>
+                  }
+                </div>
+                <div>
+                  <label class="label" for="d-note">Not</label>
+                  <textarea id="d-note" class="textarea h-32" [(ngModel)]="note" placeholder="ör. Konsinye dolabına yerleştirildi"></textarea>
+                </div>
+              </div>
+              <p class="flex items-center gap-1.5 text-xs" [class.text-ok]="positionState() === 'ok'" [class.text-muted]="positionState() !== 'ok'">
+                <span class="icon text-[16px]">{{ positionState() === 'ok' ? 'location_on' : 'location_off' }}</span>
+                @switch (positionState()) {
+                  @case ('ok') {
+                    Konum alındı; belgeye eklenecek.
+                  }
+                  @case ('pending') {
+                    Konum alınıyor…
+                  }
+                  @default {
+                    Konum alınamadı (izin verilmedi). Belge konumsuz kaydedilir.
+                    <button class="font-medium text-primary-ink hover:underline" (click)="locate()">Tekrar dene</button>
+                  }
+                }
+              </p>
+            </div>
+          </section>
+        }
+      </div>
+
+      <!-- Özet ve kayıt -->
+      <aside class="card xl:sticky xl:top-24">
+        <div class="card-head">
+          <h2 class="card-title flex-1">Özet</h2>
+          <span class="badge" [class]="isReturn() ? 'badge-warn' : 'badge-primary'">{{ isReturn() ? 'Geri alma' : 'Konsinye teslim' }}</span>
+        </div>
+        <div class="space-y-4 p-5">
+          <dl class="space-y-2 rounded-xl bg-surface-2 p-4 text-sm">
+            <div class="flex justify-between gap-3">
+              <dt class="text-muted">Hastane</dt>
+              <dd class="text-right font-medium text-ink">{{ hospital()?.name ?? '—' }}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-muted">Lokasyon</dt>
+              <dd class="text-right text-ink">{{ location()?.name ?? '—' }}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-muted">{{ isReturn() ? 'Teslim eden' : 'Teslim alan' }}</dt>
+              <dd class="text-right text-ink">{{ otherPerson() ? otherName || '—' : (contact()?.name ?? '—') }}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-muted">{{ isReturn() ? 'Teslim alan (siz)' : 'Teslim eden (siz)' }}</dt>
+              <dd class="text-right text-ink">{{ auth.user()?.name }}</dd>
+            </div>
+          </dl>
+
+          <div>
+            <div class="mb-2 flex items-center justify-between text-sm">
+              <span class="font-medium text-ink">Ürünler</span>
+              <span class="text-muted">{{ lines().length }} kalem · {{ qty(totalUnits()) }} adet</span>
+            </div>
+            <ul class="max-h-64 space-y-1.5 overflow-y-auto">
+              @for (l of lines(); track l.stock.id) {
+                <li class="flex items-start justify-between gap-2 rounded-lg border border-line px-3 py-2 text-sm">
+                  <span class="min-w-0">
+                    <span class="block truncate text-ink">{{ l.stock.product?.name }}</span>
+                    <span class="block font-mono text-xs text-muted">
+                      {{ l.stock.serial_number ? 'SN ' + l.stock.serial_number : '' }}{{ l.stock.lot_number ? ' LOT ' + l.stock.lot_number : '' }}
+                    </span>
+                  </span>
+                  <span class="shrink-0 font-semibold tabular-nums text-ink">{{ qty(l.quantity) }}</span>
+                </li>
+              } @empty {
+                <li class="rounded-lg border border-dashed border-line p-4 text-center text-sm text-muted">Henüz ürün eklenmedi.</li>
+              }
+            </ul>
           </div>
-        </li>
-      } @empty {
-        <li class="px-5 py-10 text-center text-sm text-muted">Henüz teslimatınız yok.</li>
-      }
-    </ul>
-  </section>
+
+          @if (error()) {
+            <p class="form-error">{{ error() }}</p>
+          }
+
+          <button class="btn h-11 w-full" [class]="isReturn() ? 'btn-secondary' : 'btn-primary'" [disabled]="!canSubmit()" (click)="submit()">
+            @if (saving()) {
+              <span class="icon animate-spin">progress_activity</span>
+            } @else {
+              <span class="icon">verified</span>
+            }
+            {{ isReturn() ? 'Geri almayı tamamla' : 'Teslimatı tamamla' }}
+          </button>
+          @if (missing(); as m) {
+            <p class="text-center text-xs text-muted">{{ m }}</p>
+          }
+        </div>
+      </aside>
+    </div>
+  }
 }
