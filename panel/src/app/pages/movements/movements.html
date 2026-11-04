@@ -1,0 +1,141 @@
+<div class="page-head">
+  <div class="flex-1">
+    <h1 class="page-title">Stok Hareketleri</h1>
+    <p class="page-sub">Kim, ne zaman, hangi depodan, hangi ürünü kullandı. Kayıtlar değiştirilemez.</p>
+  </div>
+</div>
+
+<div class="card">
+  <form class="grid gap-3 border-b border-line p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7" [formGroup]="filters">
+    <select class="select" formControlName="type" aria-label="Hareket türü">
+      <option value="">Tüm hareketler</option>
+      @for (t of types; track t) {
+        <option [value]="t">{{ typeLabels[t] }}</option>
+      }
+    </select>
+    @if (users().length) {
+      <select class="select" formControlName="user_id" aria-label="Personel">
+        <option value="">Tüm personel</option>
+        @for (u of users(); track u.id) {
+          <option [value]="u.id">{{ u.name }}</option>
+        }
+      </select>
+    }
+    @if (warehouses().length) {
+      <select class="select" formControlName="warehouse_id" aria-label="Depo">
+        <option value="">Tüm depolar</option>
+        @for (w of warehouses(); track w.id) {
+          <option [value]="w.id">{{ w.name }}</option>
+        }
+      </select>
+    }
+    @if (hospitals().length) {
+      <select class="select" formControlName="hospital_id" aria-label="Hastane">
+        <option value="">Tüm hastaneler</option>
+        @for (h of hospitals(); track h.id) {
+          <option [value]="h.id">{{ h.name }}</option>
+        }
+      </select>
+    }
+    <div class="sm:col-span-2 lg:col-span-1 xl:col-span-2">
+      <app-product-picker placeholder="Ürün ara (tümü)" (productChange)="onProduct($event)" />
+    </div>
+    <input class="input" type="date" formControlName="from" aria-label="Başlangıç tarihi" title="Başlangıç" />
+    <input class="input" type="date" formControlName="to" aria-label="Bitiş tarihi" title="Bitiş" />
+    <input class="input xl:col-span-2" formControlName="reference" placeholder="Referans (hasta / fatura no)" aria-label="Referans" />
+    <button type="button" class="btn btn-ghost btn-sm justify-self-start" (click)="clear()">
+      <span class="icon">filter_alt_off</span> Temizle
+    </button>
+  </form>
+
+  @if (loading()) {
+    <div class="loading-bar"></div>
+  }
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Tarih</th>
+          <th>Hareket</th>
+          <th>Personel</th>
+          <th>Ürün</th>
+          <th class="num">Miktar</th>
+          <th>Depo</th>
+          <th>Hastane</th>
+          <th>Ayrıntı</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (m of page()?.data ?? []; track m.id) {
+          <tr>
+            <td class="whitespace-nowrap">
+              <div class="text-ink">{{ m.created_at | date: 'dd.MM.yyyy' }}</div>
+              <div class="cell-sub">{{ m.created_at | date: 'HH:mm' }}</div>
+            </td>
+            <td>
+              <span class="badge" [class]="typeStyle[m.type].badge">
+                <span class="icon text-[14px]">{{ typeStyle[m.type].icon }}</span>{{ typeLabels[m.type] }}
+              </span>
+            </td>
+            <td class="whitespace-nowrap text-ink">{{ m.user?.name }}</td>
+            <td>
+              <div class="cell-title">{{ m.product?.name }}</div>
+              <div class="cell-sub font-mono">{{ m.product?.code }}</div>
+            </td>
+            <td class="num whitespace-nowrap">
+              <span class="font-semibold" [class.text-ok]="positive(m)" [class.text-danger]="!positive(m)">
+                {{ positive(m) ? '+' : '−' }}{{ qty(m.quantity, true) }}
+              </span>
+              <span class="ms-1 text-muted">{{ m.product?.unit }}</span>
+              <div class="cell-sub">Kalan {{ qty(m.balance_after) }}</div>
+            </td>
+            <td class="whitespace-nowrap">{{ m.warehouse?.name }}</td>
+            <td class="min-w-40">
+              @if (m.hospital) {
+                <div class="flex items-center gap-1.5 text-ink">
+                  <span class="icon text-[16px] text-primary-ink">local_hospital</span>{{ m.hospital.name }}
+                </div>
+              } @else {
+                <span class="text-muted">—</span>
+              }
+            </td>
+            <td class="min-w-48">
+              @if (m.reference) {
+                <div class="text-ink">{{ m.reference }}</div>
+              }
+              @if (m.lot_number || m.expiry_date) {
+                <div class="cell-sub">
+                  {{ m.lot_number ? 'Lot ' + m.lot_number : '' }}{{ m.lot_number && m.expiry_date ? ' · ' : '' }}{{
+                    m.expiry_date ? 'SKT ' + (m.expiry_date | date: 'dd.MM.yyyy') : ''
+                  }}
+                </div>
+              }
+              @if (m.note) {
+                <div class="cell-sub">{{ m.note }}</div>
+              }
+              @if (mapUrl(m); as url) {
+                <a [href]="url" target="_blank" rel="noopener" class="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary-ink hover:underline">
+                  <span class="icon text-[14px]">location_on</span>Konumu aç
+                </a>
+              }
+              @if (!m.reference && !m.lot_number && !m.note && !mapUrl(m)) {
+                <span class="text-muted">—</span>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="8" class="py-16 text-center">
+              @if (!loading()) {
+                <span class="icon text-[40px] text-muted">swap_vert</span>
+                <p class="mt-2 font-medium text-ink">Bu filtrelere uyan hareket yok</p>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <app-pagination [page]="page()" [sizes]="[50, 100, 200]" (pageChange)="goTo($event)" (sizeChange)="setSize($event)" />
+</div>

@@ -1,0 +1,108 @@
+<div class="page-head">
+  <div class="flex-1">
+    <h1 class="page-title">Roller ve Yetkiler</h1>
+    <p class="page-sub">Her rolün hangi sayfaları görüp hangi işlemleri yapabileceğini belirleyin.</p>
+  </div>
+  <button class="btn btn-primary" *appCan="'roles.create'" (click)="startNew()">
+    <span class="icon">add</span> Yeni rol
+  </button>
+</div>
+
+@if (!groups().length) {
+  <div class="card h-96 p-5"><div class="skeleton h-full"></div></div>
+} @else {
+  <div class="grid items-start gap-6 lg:grid-cols-[300px_1fr]">
+    <!-- Rol listesi -->
+    <div class="card p-2">
+      @for (r of roles(); track r.id) {
+        <button
+          class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition"
+          [class]="selectedId() === r.id ? 'bg-primary-soft' : 'hover:bg-surface-2'"
+          (click)="select(r)"
+        >
+          <div
+            class="grid size-9 shrink-0 place-items-center rounded-lg"
+            [class]="selectedId() === r.id ? 'bg-primary text-white dark:text-slate-950' : 'bg-surface-2 text-muted'"
+          >
+            <span class="icon text-[18px]">{{ r.slug === 'super-admin' ? 'verified_user' : 'shield_person' }}</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm font-medium text-ink">{{ r.name }}</div>
+            <div class="text-xs text-muted">
+              {{ r.users_count }} personel ·
+              {{ r.slug === 'super-admin' ? 'tüm yetkiler' : r.permissions.length + ' / ' + totalCount() + ' yetki' }}
+            </div>
+          </div>
+          @if (r.is_system) {
+            <span class="icon text-[16px] text-muted" title="Sistem rolü (silinemez)">lock</span>
+          }
+        </button>
+      }
+      @if (selectedId() === 'new') {
+        <div class="flex items-center gap-3 rounded-lg bg-primary-soft px-3 py-2.5">
+          <div class="grid size-9 place-items-center rounded-lg bg-primary text-white dark:text-slate-950">
+            <span class="icon text-[18px]">add</span>
+          </div>
+          <span class="text-sm font-medium text-ink">Yeni rol</span>
+        </div>
+      }
+    </div>
+
+    <!-- Düzenleyici -->
+    @if (selectedId() !== null) {
+      <div class="card">
+        <div class="grid gap-4 border-b border-line p-5 sm:grid-cols-2">
+          <div>
+            <label class="label" for="r-name">Rol adı</label>
+            <input id="r-name" class="input" [(ngModel)]="name" [disabled]="!canEdit()" required />
+          </div>
+          <div>
+            <label class="label" for="r-desc">Açıklama</label>
+            <input id="r-desc" class="input" [(ngModel)]="description" [disabled]="!canEdit()" />
+          </div>
+        </div>
+
+        <div class="p-5">
+          @if (isSuper()) {
+            <div class="mb-4 flex gap-3 rounded-xl bg-primary-soft p-3.5 text-sm text-primary-ink">
+              <span class="icon">verified_user</span>
+              Süper yönetici rolü tüm sayfalara ve işlemlere erişir; değiştirilemez.
+            </div>
+          } @else if (!canEdit()) {
+            <div class="mb-4 flex gap-3 rounded-xl bg-warn-soft p-3.5 text-sm text-warn">
+              <span class="icon">visibility</span>
+              Bu rolü değiştirme yetkiniz yok; yalnızca görüntülüyorsunuz.
+            </div>
+          }
+          <app-permission-matrix
+            [groups]="groups()"
+            [(selected)]="permissions"
+            [locked]="isSuper() ? allKeys() : []"
+            [allowed]="allowed()"
+            [disabled]="!canEdit()"
+          />
+          @if (error()) {
+            <p class="form-error mt-4">{{ error() }}</p>
+          }
+        </div>
+
+        <div class="flex items-center gap-2 border-t border-line bg-surface-2 px-5 py-3.5">
+          @if (selected() && !selected()!.is_system) {
+            <button class="btn btn-ghost text-danger" *appCan="'roles.delete'" (click)="remove()">
+              <span class="icon">delete</span> Rolü sil
+            </button>
+          }
+          <span class="flex-1"></span>
+          @if (canEdit()) {
+            @if (dirty()) {
+              <span class="text-xs text-warn">Kaydedilmemiş değişiklik var</span>
+            }
+            <button class="btn btn-primary" (click)="save()" [disabled]="saving() || !name.trim() || !dirty()">
+              Kaydet
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+}

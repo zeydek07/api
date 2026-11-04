@@ -1,0 +1,130 @@
+<form [formGroup]="form" (ngSubmit)="save()">
+  <app-modal [title]="isEdit ? 'Personeli düzenle' : 'Yeni personel'" subtitle="Hesap bilgileri, depolar ve sayfa yetkileri">
+    @if (!ready()) {
+      <div class="loading-bar -mx-6 -mt-5 mb-5"></div>
+    }
+
+    @if (canSeePermissions) {
+      <div class="-mt-1 mb-5 flex gap-1 border-b border-line" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          class="-mb-px border-b-2 px-3 pb-2.5 text-sm font-medium transition"
+          [class]="tab() === 'info' ? 'border-primary text-ink' : 'border-transparent text-muted hover:text-ink'"
+          [attr.aria-selected]="tab() === 'info'"
+          (click)="tab.set('info')"
+        >
+          Bilgiler
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="-mb-px flex items-center gap-1.5 border-b-2 px-3 pb-2.5 text-sm font-medium transition"
+          [class]="tab() === 'access' ? 'border-primary text-ink' : 'border-transparent text-muted hover:text-ink'"
+          [attr.aria-selected]="tab() === 'access'"
+          (click)="tab.set('access')"
+        >
+          Sayfa yetkileri
+          @if (extraCount()) {
+            <span class="badge badge-primary">+{{ extraCount() }}</span>
+          }
+        </button>
+      </div>
+    }
+
+    <div [hidden]="tab() !== 'info'" class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label class="label" for="u-name">Ad soyad *</label>
+        <input id="u-name" class="input" formControlName="name" />
+      </div>
+      <div>
+        <label class="label" for="u-phone">Telefon</label>
+        <input id="u-phone" class="input" formControlName="phone" placeholder="05xx xxx xx xx" />
+      </div>
+      <div>
+        <label class="label" for="u-email">E-posta (giriş için) *</label>
+        <input id="u-email" class="input" type="email" formControlName="email" autocomplete="off" />
+      </div>
+      <div>
+        <label class="label" for="u-pass">{{ isEdit ? 'Yeni şifre' : 'Şifre *' }}</label>
+        <input id="u-pass" class="input" type="password" formControlName="password" autocomplete="new-password" />
+        <p class="hint">{{ isEdit ? 'Değişmeyecekse boş bırakın. ' : '' }}En az 8 karakter.</p>
+      </div>
+      <div>
+        <label class="label" for="u-role">Rol *</label>
+        <select id="u-role" class="select" formControlName="role_id">
+          <option [ngValue]="null" disabled>Seçin</option>
+          @for (r of roles; track r.id) {
+            <option [ngValue]="r.id">{{ r.name }}</option>
+          }
+        </select>
+      </div>
+      <div>
+        <label class="label" for="u-manager">Yöneticisi</label>
+        <select id="u-manager" class="select" formControlName="manager_id">
+          <option [ngValue]="null">— Yok —</option>
+          @for (m of managers(); track m.id) {
+            <option [ngValue]="m.id">{{ m.name }}</option>
+          }
+        </select>
+        <p class="hint">Yönetici, ekibinin stok hareketlerini görebilir.</p>
+      </div>
+
+      @if (canSeeWarehouses) {
+        <div class="sm:col-span-2">
+          <span class="label">Ürün düşebileceği depolar</span>
+          <p class="hint -mt-1 mb-2">Saha personeli mobil uygulamada yalnızca bu depolardan ürün düşebilir.</p>
+          <div class="grid gap-2 sm:grid-cols-2">
+            @for (w of warehouses(); track w.id) {
+              <label
+                class="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition"
+                [class]="hasWarehouse(w.id) ? 'border-primary bg-primary-soft' : 'border-line hover:bg-surface-2'"
+              >
+                <input type="checkbox" class="size-4" [checked]="hasWarehouse(w.id)" (change)="toggleWarehouse(w.id, $any($event.target).checked)" />
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-medium text-ink">{{ w.name }}</span>
+                  <span class="block text-xs text-muted">{{ whLabels[w.type] }}</span>
+                </span>
+              </label>
+            } @empty {
+              <p class="text-sm text-muted">Henüz depo yok.</p>
+            }
+          </div>
+        </div>
+      }
+
+      <label class="check sm:col-span-2">
+        <input type="checkbox" class="switch" formControlName="is_active" />
+        Aktif <span class="text-muted">(giriş yapabilir)</span>
+      </label>
+    </div>
+
+    @if (canSeePermissions) {
+      <div [hidden]="tab() !== 'access'">
+        <div class="mb-4 flex gap-3 rounded-xl bg-primary-soft p-3.5 text-sm text-primary-ink">
+          <span class="icon">info</span>
+          <p>
+            Rolden gelen yetkiler <strong>işaretli ve kilitlidir</strong>. Bu kişiye rolünden bağımsız ek yetki vermek için
+            diğer kutuları işaretleyin.
+          </p>
+        </div>
+        <app-permission-matrix
+          [groups]="groups()"
+          [(selected)]="directPermissions"
+          [locked]="rolePermissions()"
+          lockedLabel="rol"
+          [allowed]="allowedPermissions()"
+        />
+      </div>
+    }
+
+    @if (error()) {
+      <p class="form-error mt-4">{{ error() }}</p>
+    }
+
+    <div modal-footer class="flex gap-2">
+      <button type="button" class="btn btn-secondary" (click)="ref.close()">Vazgeç</button>
+      <button type="submit" class="btn btn-primary" [disabled]="saving() || !ready()">Kaydet</button>
+    </div>
+  </app-modal>
+</form>

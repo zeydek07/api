@@ -1,0 +1,86 @@
+<app-modal
+  [title]="isReceive ? 'Stok girişi' : 'Depolar arası transfer'"
+  [subtitle]="isReceive ? 'Satın alma, iade vb. ile depoya gelen ürünler' : 'Örn. merkez depodan personelin çantasına'"
+>
+  <div class="grid gap-4 sm:grid-cols-2">
+    <div>
+      <label class="label" for="op-wh">{{ isReceive ? 'Giriş yapılacak depo *' : 'Çıkış deposu *' }}</label>
+      <select id="op-wh" class="select" [(ngModel)]="warehouseId">
+        <option [ngValue]="null" disabled>Seçin</option>
+        @for (w of activeWarehouses; track w.id) {
+          <option [ngValue]="w.id">{{ w.name }}</option>
+        }
+      </select>
+    </div>
+    @if (isReceive) {
+      <div>
+        <label class="label" for="op-ref">Fatura / irsaliye no</label>
+        <input id="op-ref" class="input" [(ngModel)]="reference" />
+      </div>
+    } @else {
+      <div>
+        <label class="label" for="op-to">Hedef depo *</label>
+        <select id="op-to" class="select" [(ngModel)]="toWarehouseId">
+          <option [ngValue]="null" disabled>Seçin</option>
+          @for (w of activeWarehouses; track w.id) {
+            <option [ngValue]="w.id" [disabled]="w.id === warehouseId">{{ w.name }}</option>
+          }
+        </select>
+      </div>
+    }
+    <div class="sm:col-span-2">
+      <label class="label" for="op-note">Not</label>
+      <input id="op-note" class="input" [(ngModel)]="note" />
+    </div>
+  </div>
+
+  <div class="mb-3 mt-6 flex items-center justify-between">
+    <h3 class="text-sm font-semibold">Ürünler</h3>
+    <span class="text-xs text-muted">{{ validLines().length }} kalem</span>
+  </div>
+
+  <div class="overflow-hidden rounded-xl border border-line">
+    <div class="hidden grid-cols-[minmax(0,2fr)_110px_130px_150px_36px] gap-3 bg-surface-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted md:grid">
+      <span>Ürün</span><span>Miktar</span><span>Lot no</span><span>Son kullanma</span><span></span>
+    </div>
+    @for (line of lines(); track $index; let i = $index) {
+      <div class="grid grid-cols-2 gap-3 border-t border-line p-3 first:border-t-0 md:grid-cols-[minmax(0,2fr)_110px_130px_150px_36px] md:items-center md:first:border-t">
+        <div class="col-span-2 md:col-span-1">
+          <app-product-picker [(product)]="line.product" (productChange)="touch()" />
+        </div>
+        <div class="relative">
+          <input
+            class="input tabular-nums"
+            [class.pr-12]="line.product"
+            type="number"
+            min="0"
+            placeholder="Miktar"
+            aria-label="Miktar"
+            [(ngModel)]="line.quantity"
+            (ngModelChange)="touch()"
+          />
+          @if (line.product) {
+            <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">{{ line.product.unit }}</span>
+          }
+        </div>
+        <input class="input" placeholder="Lot no" aria-label="Lot no" [(ngModel)]="line.lot_number" />
+        <input class="input" type="date" aria-label="Son kullanma tarihi" [(ngModel)]="line.expiry_date" />
+        <button type="button" class="btn-icon danger justify-self-end" (click)="removeLine(i)" aria-label="Satırı sil">
+          <span class="icon">delete</span>
+        </button>
+      </div>
+    }
+  </div>
+  <button type="button" class="btn btn-ghost btn-sm mt-2" (click)="addLine()"><span class="icon">add</span> Satır ekle</button>
+
+  @if (error()) {
+    <p class="form-error mt-4">{{ error() }}</p>
+  }
+
+  <div modal-footer class="flex gap-2">
+    <button type="button" class="btn btn-secondary" (click)="ref.close()">Vazgeç</button>
+    <button type="button" class="btn btn-primary" (click)="save()" [disabled]="!canSave()">
+      {{ isReceive ? 'Girişi kaydet' : 'Transferi yap' }}
+    </button>
+  </div>
+</app-modal>

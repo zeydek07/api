@@ -1,0 +1,125 @@
+<div class="page-head">
+  <div class="flex-1">
+    <h1 class="page-title">Hastaneler</h1>
+    <p class="page-sub">Mümessillerin ürün teslim ettiği hastaneler. Bir hastaneye tıklayarak teslimat geçmişini görün.</p>
+  </div>
+  <button class="btn btn-primary" *appCan="'hospitals.create'" (click)="open()">
+    <span class="icon">add</span> Yeni hastane
+  </button>
+</div>
+
+<div class="card">
+  <div class="flex flex-wrap items-center gap-3 border-b border-line p-4">
+    <div class="relative min-w-60 flex-1">
+      <span class="icon pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-muted">search</span>
+      <input class="input pl-9" [formControl]="q" placeholder="Hastane adı, ilçe veya kod ile ara" aria-label="Ara" />
+    </div>
+    <app-search-select
+      class="block w-52"
+      [formControl]="city"
+      [options]="provinces()"
+      placeholder="Tüm iller"
+      searchPlaceholder="İl ara veya plaka kodu yaz"
+      ariaLabel="İl"
+      [clearable]="true"
+    />
+    <select class="select w-64" [formControl]="type" aria-label="Tür">
+      <option value="">Tüm türler</option>
+      @for (t of types; track t) {
+        <option [value]="t">{{ typeLabels[t] }}</option>
+      }
+    </select>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-bar"></div>
+  }
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Hastane</th>
+          <th>Konum</th>
+          <th class="num">Son 30 gün</th>
+          <th>Son teslimat</th>
+          <th class="actions"><span class="sr-only">İşlemler</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (h of page()?.data ?? []; track h.id) {
+          <tr class="cursor-pointer" (click)="openDetail(h)">
+            <td>
+              <div class="flex items-center gap-3">
+                <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary-ink">
+                  <span class="icon text-[18px]">local_hospital</span>
+                </div>
+                <div class="min-w-0">
+                  <a class="cell-title hover:underline" [routerLink]="['/hastaneler', h.id]" (click)="$event.stopPropagation()">{{ h.name }}</a>
+                  <div class="cell-sub flex items-center gap-1.5">
+                    <span class="badge">{{ typeLabels[h.type] }}</span>
+                    @if (h.code) {
+                      <span class="font-mono">{{ h.code }}</span>
+                    }
+                    @if (!h.is_active) {
+                      <span class="badge badge-warn">Pasif</span>
+                    }
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="text-ink">{{ h.city || '—' }}</div>
+              @if (h.district) {
+                <div class="cell-sub">{{ h.district }}</div>
+              }
+            </td>
+            <td class="num">
+              @if (h.deliveries_30d) {
+                <span class="font-semibold text-ink">{{ h.deliveries_30d }}</span><span class="ms-1 text-muted">kalem</span>
+              } @else {
+                <span class="text-muted">—</span>
+              }
+            </td>
+            <td class="whitespace-nowrap text-muted">
+              {{ h.last_delivery_at ? (h.last_delivery_at | date: 'dd.MM.yyyy HH:mm') : 'Henüz yok' }}
+            </td>
+            <td class="actions" (click)="$event.stopPropagation()">
+              <ng-container *appCan="['hospitals.update', 'hospitals.delete']">
+                <button class="btn-icon" [cdkMenuTriggerFor]="rowMenu" aria-label="İşlemler">
+                  <span class="icon">more_horiz</span>
+                </button>
+                <ng-template #rowMenu>
+                  <div class="menu" cdkMenu>
+                    <button class="menu-item" cdkMenuItem (cdkMenuItemTriggered)="openDetail(h)">
+                      <span class="icon">history</span> Teslimat geçmişi
+                    </button>
+                    <button class="menu-item" *appCan="'hospitals.update'" cdkMenuItem (cdkMenuItemTriggered)="open(h)">
+                      <span class="icon">edit</span> Düzenle
+                    </button>
+                    <ng-container *appCan="'hospitals.delete'">
+                      <div class="menu-sep"></div>
+                      <button class="menu-item danger" cdkMenuItem (cdkMenuItemTriggered)="remove(h)">
+                        <span class="icon">delete</span> Sil
+                      </button>
+                    </ng-container>
+                  </div>
+                </ng-template>
+              </ng-container>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5" class="py-16 text-center">
+              @if (!loading()) {
+                <span class="icon text-[40px] text-muted">domain_disabled</span>
+                <p class="mt-2 font-medium text-ink">Hastane bulunamadı</p>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <app-pagination [page]="page()" (pageChange)="goTo($event)" (sizeChange)="setSize($event)" />
+</div>

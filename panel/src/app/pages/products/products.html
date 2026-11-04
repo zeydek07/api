@@ -1,0 +1,128 @@
+<div class="page-head">
+  <div class="flex-1">
+    <h1 class="page-title">Ürünler</h1>
+    <p class="page-sub">Medikal ürün kataloğu ve tüm depolardaki toplam stok.</p>
+  </div>
+  <button class="btn btn-primary" *appCan="'products.create'" (click)="open()">
+    <span class="icon">add</span> Yeni ürün
+  </button>
+</div>
+
+<div class="card">
+  <!-- Filtreler -->
+  <div class="flex flex-wrap items-center gap-3 border-b border-line p-4">
+    <div class="relative min-w-60 flex-1">
+      <span class="icon pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-muted">search</span>
+      <input class="input pl-9" [formControl]="q" placeholder="Ad, kod veya barkod ile ara" aria-label="Ara" />
+    </div>
+    <select class="select w-48" [formControl]="category" aria-label="Kategori">
+      <option value="">Tüm kategoriler</option>
+      @for (c of categories(); track c) {
+        <option [value]="c">{{ c }}</option>
+      }
+    </select>
+    <select class="select w-36" [formControl]="active" aria-label="Durum">
+      <option value="">Tüm durumlar</option>
+      <option value="1">Aktif</option>
+      <option value="0">Pasif</option>
+    </select>
+    @if (hasFilters()) {
+      <button class="btn btn-ghost btn-sm" (click)="clearFilters()"><span class="icon">filter_alt_off</span> Temizle</button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="loading-bar"></div>
+  }
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Ürün</th>
+          <th>Kod / Barkod</th>
+          <th>Kategori</th>
+          <th class="num">Toplam stok</th>
+          <th>Durum</th>
+          <th class="actions"><span class="sr-only">İşlemler</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (p of page()?.data ?? []; track p.id) {
+          <tr class="cursor-pointer" (click)="detail(p)">
+            <td>
+              <div class="flex items-center gap-3">
+                <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary-ink">
+                  <span class="icon text-[18px]">medication</span>
+                </div>
+                <div>
+                  <div class="cell-title">{{ p.name }}</div>
+                  @if (p.brand) {
+                    <div class="cell-sub">{{ p.brand }}</div>
+                  }
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="font-mono text-[13px] text-ink">{{ p.code }}</div>
+              @if (p.barcode) {
+                <div class="cell-sub font-mono">{{ p.barcode }}</div>
+              }
+            </td>
+            <td>{{ p.category || '—' }}</td>
+            <td class="num">
+              @if (isLow(p)) {
+                <span class="badge badge-danger" [title]="'Minimum: ' + p.min_stock_level">
+                  <span class="icon text-[14px]">warning</span>{{ qty(p.total_stock) }} {{ p.unit }}
+                </span>
+              } @else {
+                <span class="font-medium text-ink">{{ qty(p.total_stock) }}</span><span class="ms-1 text-muted">{{ p.unit }}</span>
+              }
+            </td>
+            <td>
+              @if (p.is_active) {
+                <span class="badge badge-ok"><span class="dot"></span>Aktif</span>
+              } @else {
+                <span class="badge"><span class="dot"></span>Pasif</span>
+              }
+            </td>
+            <td class="actions" (click)="$event.stopPropagation()">
+              <ng-container *appCan="['products.update', 'products.delete']">
+                <button class="btn-icon" [cdkMenuTriggerFor]="rowMenu" aria-label="İşlemler">
+                  <span class="icon">more_horiz</span>
+                </button>
+                <ng-template #rowMenu>
+                  <div class="menu" cdkMenu>
+                    <button class="menu-item" cdkMenuItem (cdkMenuItemTriggered)="detail(p)">
+                      <span class="icon">visibility</span> Depolardaki stok
+                    </button>
+                    <button class="menu-item" *appCan="'products.update'" cdkMenuItem (cdkMenuItemTriggered)="open(p)">
+                      <span class="icon">edit</span> Düzenle
+                    </button>
+                    <ng-container *appCan="'products.delete'">
+                      <div class="menu-sep"></div>
+                      <button class="menu-item danger" cdkMenuItem (cdkMenuItemTriggered)="remove(p)">
+                        <span class="icon">delete</span> Sil
+                      </button>
+                    </ng-container>
+                  </div>
+                </ng-template>
+              </ng-container>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="py-16 text-center">
+              @if (!loading()) {
+                <span class="icon text-[40px] text-muted">inventory</span>
+                <p class="mt-2 font-medium text-ink">Ürün bulunamadı</p>
+                <p class="text-muted">{{ hasFilters() ? 'Filtreleri değiştirip tekrar deneyin.' : 'İlk ürününüzü ekleyerek başlayın.' }}</p>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <app-pagination [page]="page()" (pageChange)="goTo($event)" (sizeChange)="setSize($event)" />
+</div>

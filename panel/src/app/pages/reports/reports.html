@@ -1,0 +1,174 @@
+<div class="page-head">
+  <div class="flex-1">
+    <h1 class="page-title">Raporlar</h1>
+    <p class="page-sub">Saha kullanımı ve kritik stok. Yetkinize göre ekibinizin veya tüm personelin verisi listelenir.</p>
+  </div>
+</div>
+
+<div class="mb-5 flex gap-1 border-b border-line" role="tablist">
+  <button
+    role="tab"
+    class="-mb-px flex items-center gap-2 border-b-2 px-4 pb-3 text-sm font-medium transition"
+    [class]="active() === 'usage' ? 'border-primary text-ink' : 'border-transparent text-muted hover:text-ink'"
+    [attr.aria-selected]="active() === 'usage'"
+    (click)="show('usage')"
+  >
+    <span class="icon text-[18px]">monitoring</span> Saha kullanımı
+  </button>
+  <button
+    role="tab"
+    class="-mb-px flex items-center gap-2 border-b-2 px-4 pb-3 text-sm font-medium transition"
+    [class]="active() === 'low' ? 'border-primary text-ink' : 'border-transparent text-muted hover:text-ink'"
+    [attr.aria-selected]="active() === 'low'"
+    (click)="show('low')"
+  >
+    <span class="icon text-[18px]">warning</span> Kritik stok
+  </button>
+</div>
+
+@if (active() === 'usage') {
+  <div class="card">
+    <form class="flex flex-wrap items-end gap-3 border-b border-line p-4" [formGroup]="form">
+      <div>
+        <label class="label" for="rp-from">Başlangıç</label>
+        <input id="rp-from" class="input w-40" type="date" formControlName="from" />
+      </div>
+      <div>
+        <label class="label" for="rp-to">Bitiş</label>
+        <input id="rp-to" class="input w-40" type="date" formControlName="to" />
+      </div>
+      <div class="flex gap-1">
+        @for (p of presets; track p.l) {
+          <button type="button" class="btn btn-ghost btn-sm" (click)="preset(p.days)">{{ p.l }}</button>
+        }
+      </div>
+      <span class="flex-1"></span>
+      <div>
+        <span class="label">Gruplama</span>
+        <div class="inline-flex flex-wrap rounded-lg border border-line bg-surface-2 p-0.5" role="group">
+          @for (o of groupOptions; track o.v) {
+            <button
+              type="button"
+              class="rounded-md px-3 py-1.5 text-[13px] font-medium transition"
+              [class]="groupBy() === o.v ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'"
+              [attr.aria-pressed]="groupBy() === o.v"
+              (click)="form.controls.group_by.setValue(o.v)"
+            >
+              {{ o.l }}
+            </button>
+          }
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" (click)="exportCsv()" [disabled]="!usage().length">
+        <span class="icon">download</span> Excel (CSV)
+      </button>
+    </form>
+
+    @if (loading()) {
+      <div class="loading-bar"></div>
+    }
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            @if (hasHospital()) {
+              <th>Hastane</th>
+            }
+            @if (hasUser()) {
+              <th>Personel</th>
+            }
+            @if (hasProduct()) {
+              <th>Ürün</th>
+            }
+            <th class="num">Toplam kullanım</th>
+            <th class="num">Kayıt sayısı</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of usage(); track $index) {
+            <tr>
+              @if (hasHospital()) {
+                <td>
+                  <div class="cell-title">{{ r.hospital_name }}</div>
+                  <div class="cell-sub">{{ r.city }}</div>
+                </td>
+              }
+              @if (hasUser()) {
+                <td class="cell-title">{{ r.user_name }}</td>
+              }
+              @if (hasProduct()) {
+                <td>
+                  <div class="cell-title">{{ r.product_name }}</div>
+                  <div class="cell-sub font-mono">{{ r.code }}</div>
+                </td>
+              }
+              <td class="num">
+                <span class="font-semibold text-ink">{{ qty(r.total_quantity) }}</span>
+                <span class="ms-1 text-muted">{{ r.unit ?? '' }}</span>
+              </td>
+              <td class="num">{{ r.line_count }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td [attr.colspan]="colCount() + 2" class="py-16 text-center">
+                @if (!loading()) {
+                  <span class="icon text-[40px] text-muted">query_stats</span>
+                  <p class="mt-2 font-medium text-ink">Bu tarih aralığında saha kullanımı yok</p>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+        @if (usage().length) {
+          <tfoot>
+            <tr class="bg-surface-2">
+              <td [attr.colspan]="colCount() + 1" class="font-semibold text-ink">Toplam kayıt</td>
+              <td class="num font-semibold text-ink">{{ totalLines() }}</td>
+            </tr>
+          </tfoot>
+        }
+      </table>
+    </div>
+  </div>
+} @else {
+  <div class="card">
+    @if (lowStock() === null) {
+      <div class="loading-bar"></div>
+    }
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Ürün</th>
+            <th class="num">Toplam stok</th>
+            <th class="num">Minimum</th>
+            <th class="num">Eksik</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of lowStock() ?? []; track r.id) {
+            <tr>
+              <td>
+                <div class="cell-title">{{ r.name }}</div>
+                <div class="cell-sub font-mono">{{ r.code }}</div>
+              </td>
+              <td class="num"><span class="badge badge-danger">{{ qty(r.total_stock) }} {{ r.unit }}</span></td>
+              <td class="num">{{ r.min_stock_level }} {{ r.unit }}</td>
+              <td class="num font-medium text-ink">{{ qty(r.min_stock_level - +r.total_stock) }} {{ r.unit }}</td>
+            </tr>
+          } @empty {
+            @if (lowStock() !== null) {
+              <tr>
+                <td colspan="4" class="py-16 text-center">
+                  <span class="icon text-[40px] text-ok">check_circle</span>
+                  <p class="mt-2 font-medium text-ink">Minimum seviyenin altında ürün yok</p>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+}

@@ -1,0 +1,169 @@
+<div class="page-head">
+  <div class="flex-1">
+    <h1 class="page-title">{{ greeting }}, {{ auth.user()?.name?.split(' ')?.[0] }}</h1>
+    <p class="page-sub">Stok ve saha kullanımının güncel özeti.</p>
+  </div>
+  <div class="flex gap-2">
+    <a class="btn btn-secondary" *appCan="'stock.transfer'" routerLink="/stok">
+      <span class="icon">local_shipping</span> Transfer yap
+    </a>
+    <a class="btn btn-primary" *appCan="'stock.receive'" routerLink="/stok">
+      <span class="icon">move_to_inbox</span> Stok girişi
+    </a>
+  </div>
+</div>
+
+@if (data(); as d) {
+  <!-- Özet kartları -->
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="card p-5">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-medium text-muted">Aktif ürün</span>
+        <span class="grid size-9 place-items-center rounded-lg bg-primary-soft text-primary-ink">
+          <span class="icon">medication</span>
+        </span>
+      </div>
+      <div class="mt-3 text-3xl font-semibold tabular-nums">{{ d.active_products }}</div>
+      <a routerLink="/urunler" class="mt-1 inline-block text-xs font-medium text-primary-ink hover:underline">Ürünleri gör →</a>
+    </div>
+
+    <div class="card p-5">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-medium text-muted">Kritik stok</span>
+        <span
+          class="grid size-9 place-items-center rounded-lg"
+          [class]="d.low_stock_count ? 'bg-danger-soft text-danger' : 'bg-ok-soft text-ok'"
+        >
+          <span class="icon">{{ d.low_stock_count ? 'warning' : 'check_circle' }}</span>
+        </span>
+      </div>
+      <div class="mt-3 text-3xl font-semibold tabular-nums">{{ d.low_stock_count }}</div>
+      @if (d.low_stock_count) {
+        <a
+          *appCan="'reports.view'"
+          routerLink="/raporlar"
+          [queryParams]="{ tab: 'kritik' }"
+          class="mt-1 inline-block text-xs font-medium text-danger hover:underline"
+          >Minimumun altındaki ürünler →</a
+        >
+      } @else {
+        <span class="mt-1 inline-block text-xs text-muted">Tüm ürünler yeterli seviyede</span>
+      }
+    </div>
+
+    <div class="card p-5">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-medium text-muted">Bugünkü saha kullanımı</span>
+        <span class="grid size-9 place-items-center rounded-lg bg-primary-soft text-primary-ink">
+          <span class="icon">today</span>
+        </span>
+      </div>
+      <div class="mt-3 text-3xl font-semibold tabular-nums">{{ d.usage_today }}</div>
+      <span class="mt-1 inline-block text-xs text-muted">kayıt</span>
+    </div>
+
+    <div class="card p-5">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-medium text-muted">Son 7 gün</span>
+        <span class="grid size-9 place-items-center rounded-lg bg-primary-soft text-primary-ink">
+          <span class="icon">date_range</span>
+        </span>
+      </div>
+      <div class="mt-3 text-3xl font-semibold tabular-nums">{{ d.usage_last_7_days }}</div>
+      <span class="mt-1 inline-block text-xs text-muted">saha kullanım kaydı</span>
+    </div>
+  </div>
+
+  <!-- Grafik + en çok kullanılanlar -->
+  <div class="mt-6 grid gap-6 xl:grid-cols-3">
+    <div class="card xl:col-span-2">
+      <div class="card-head">
+        <div class="flex-1">
+          <h2 class="card-title">Günlük saha kullanımı</h2>
+          <p class="text-xs text-muted">Son 14 gün · kayıt sayısı</p>
+        </div>
+        <div class="text-right">
+          <div class="text-xl font-semibold tabular-nums">{{ chartTotal() }}</div>
+          <div class="text-xs text-muted">toplam kayıt</div>
+        </div>
+      </div>
+      <div class="p-5">
+        <app-bar-chart [data]="chart()" unit="kayıt" ariaLabel="Son 14 günün günlük saha kullanım kayıt sayısı" />
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="flex-1">
+          <h2 class="card-title">En çok kullanılan ürünler</h2>
+          <p class="text-xs text-muted">Son 30 gün</p>
+        </div>
+      </div>
+      <div class="space-y-4 p-5">
+        @for (p of d.top_products; track p.id; let i = $index) {
+          <div>
+            <div class="flex items-baseline justify-between gap-3 text-sm">
+              <span class="truncate font-medium text-ink">{{ p.name }}</span>
+              <span class="shrink-0 tabular-nums text-ink-2">{{ qty(p.total_quantity) }} {{ p.unit }}</span>
+            </div>
+            <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-2">
+              <div class="h-full rounded-full bg-chart" [style.width.%]="pct(p.total_quantity)"></div>
+            </div>
+          </div>
+        } @empty {
+          <p class="py-8 text-center text-sm text-muted">Son 30 günde saha kullanımı yok.</p>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Son kullanımlar -->
+  <div class="card mt-6">
+    <div class="card-head">
+      <h2 class="card-title flex-1">Son hastane teslimatları</h2>
+      <a class="btn btn-ghost btn-sm" *appCan="['movements.view_team', 'movements.view_all']" routerLink="/hareketler">
+        Tümünü gör <span class="icon">arrow_forward</span>
+      </a>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Personel</th>
+            <th>Ürün</th>
+            <th class="num">Miktar</th>
+            <th>Hastane</th>
+            <th>Depo</th>
+            <th>Tarih</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of d.latest_usages; track m.id) {
+            <tr>
+              <td class="cell-title">{{ m.user?.name }}</td>
+              <td>{{ m.product?.name }}</td>
+              <td class="num">{{ qty(m.quantity, true) }} {{ m.product?.unit }}</td>
+              <td>{{ m.hospital?.name ?? '—' }}</td>
+              <td class="text-muted">{{ m.warehouse?.name }}</td>
+              <td class="whitespace-nowrap text-muted">{{ m.created_at | date: 'dd.MM.yyyy HH:mm' }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="py-10 text-center text-muted">Henüz saha kullanımı yok.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+} @else {
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    @for (i of [1, 2, 3, 4]; track i) {
+      <div class="card space-y-3 p-5">
+        <div class="skeleton h-4 w-24"></div>
+        <div class="skeleton h-8 w-16"></div>
+      </div>
+    }
+  </div>
+  <div class="card mt-6 h-80 p-5"><div class="skeleton h-full w-full"></div></div>
+}
