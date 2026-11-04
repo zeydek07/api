@@ -40,7 +40,7 @@ import { ToastService } from '../../ui/toast';
             <label class="label" for="adj-wh">Depo</label>
             <select id="adj-wh" class="select" [(ngModel)]="warehouseId">
               <option [ngValue]="null" disabled>Seçin</option>
-              @for (w of data.warehouses; track w.id) {
+              @for (w of warehouses(); track w.id) {
                 <option [ngValue]="w.id">{{ w.name }}</option>
               }
             </select>
@@ -99,7 +99,17 @@ export class AdjustDialog {
   private readonly toast = inject(ToastService);
   protected readonly qty = qty;
 
+  /** Sayfa depoları henüz yüklemeden pencere açıldıysa kendisi yükler */
+  protected readonly warehouses = signal<Warehouse[]>(this.data.warehouses);
   protected warehouseId: number | null = this.data.stock?.warehouse_id ?? null;
+
+  constructor() {
+    if (!this.data.stock && !this.data.warehouses.length) {
+      this.http
+        .get<Warehouse[]>(`${API_URL}/warehouses`, { params: { include_consignment: 1 } })
+        .subscribe((w) => this.warehouses.set(w));
+    }
+  }
   protected product: Product | null = null;
   protected lot = '';
   protected serial = '';

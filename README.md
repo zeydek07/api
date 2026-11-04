@@ -189,6 +189,21 @@ Hastaneye düz transfer ya da stok girişi yapılamaz; konsinye yalnızca imzal�
 | 422 | Doğrulama hatası / yetersiz stok (`errors` alanında ayrıntı) |
 | 429 | Çok fazla istek |
 
+## Testler
+
+**API testleri:** `php artisan test`
+
+**Tarayıcı testleri (Playwright):** paneli gerçek Chrome'da yönetici, depocu ve mümessil olarak gezer: giriş, yetkiler, karekodla stok girişi, hastaneye teslim + imza, geri alma, iptal, hastane ekleme ve telefon görünümü.
+
+```sh
+cd panel
+npm run e2e          # tüm testler (~4 dk)
+npm run e2e:ui       # adım adım izleyerek
+npm run e2e:report   # son çalıştırmanın raporu (hata ekran görüntüsü, iz)
+```
+
+Testler gerçek veriye dokunmaz: ayrı veritabanı (`medikal_stok_e2e`), ayrı portlar (API 8020, panel 4300) ve ayrı dosya klasörü (`storage/app/e2e`) kullanır. İlk çalıştırmada `.env.e2e.example` dosyası `.env.e2e` olarak kopyalanır. Veritabanı adı `_e2e` ile bitmiyorsa testler başlamaz.
+
 ## Canlıya alırken
 
 - `.env`: `APP_ENV=production`, `APP_DEBUG=false`, güçlü `ADMIN_PASSWORD`

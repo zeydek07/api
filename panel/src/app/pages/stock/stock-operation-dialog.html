@@ -7,7 +7,7 @@
       <label class="label" for="op-wh">{{ isReceive ? 'Giriş yapılacak depo *' : 'Çıkış deposu *' }}</label>
       <select id="op-wh" class="select" [(ngModel)]="warehouseId">
         <option [ngValue]="null" disabled>Seçin</option>
-        @for (w of activeWarehouses; track w.id) {
+        @for (w of activeWarehouses(); track w.id) {
           <option [ngValue]="w.id">{{ w.name }}</option>
         }
       </select>
@@ -22,7 +22,7 @@
         <label class="label" for="op-to">Hedef depo *</label>
         <select id="op-to" class="select" [(ngModel)]="toWarehouseId">
           <option [ngValue]="null" disabled>Seçin</option>
-          @for (w of activeWarehouses; track w.id) {
+          @for (w of activeWarehouses(); track w.id) {
             <option [ngValue]="w.id" [disabled]="w.id === warehouseId">{{ w.name }}</option>
           }
         </select>

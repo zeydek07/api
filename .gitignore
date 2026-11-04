@@ -25,3 +25,7 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Tarayıcı testleri (panel/e2e)
+.env.e2e
+/storage/app/e2e

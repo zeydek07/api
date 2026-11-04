@@ -32,7 +32,8 @@ return [
 
         'local' => [
             'driver' => 'local',
-            'root' => storage_path('app/private'),
+            // Testlerde (APP_ENV=e2e) ayrı klasör kullanılır ki gerçek imza dosyalarına dokunulmasın
+            'root' => storage_path(env('LOCAL_DISK_DIR', 'app/private')),
             'serve' => true,
             'throw' => false,
             'report' => false,

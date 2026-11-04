@@ -34,7 +34,11 @@ export class StockOperationDialog {
 
   protected readonly isReceive = this.data.mode === 'receive';
   // Hastaneye bırakma/geri alma imzalı teslimatla yapılır; burada yalnızca firma depoları
-  protected readonly activeWarehouses = this.data.warehouses.filter((w) => w.is_active && w.type !== 'consignment');
+  /** Sayfa depoları henüz yüklemeden pencere açıldıysa kendisi yükler */
+  private readonly warehouses = signal<Warehouse[]>(this.data.warehouses);
+  protected readonly activeWarehouses = computed(() =>
+    this.warehouses().filter((w) => w.is_active && w.type !== 'consignment'),
+  );
 
   protected warehouseId: number | null = this.data.warehouseId;
   protected toWarehouseId: number | null = null;
@@ -45,6 +49,12 @@ export class StockOperationDialog {
   protected readonly lines = signal<Line[]>([this.emptyLine()]);
   protected readonly saving = signal(false);
   protected readonly error = signal('');
+
+  constructor() {
+    if (!this.data.warehouses.length) {
+      this.http.get<Warehouse[]>(`${API_URL}/warehouses`).subscribe((w) => this.warehouses.set(w));
+    }
+  }
 
   protected readonly validLines = computed(() => this.lines().filter((l) => l.product && !this.lineError(l) && (l.quantity ?? 0) > 0));
 
