@@ -25,15 +25,16 @@ return new class extends Migration
             $table->string('receiver_name');
             $table->string('receiver_title', 120)->nullable();
             $table->foreignId('user_id')->constrained()->restrictOnDelete();                   // teslim eden firma personeli
-            $table->timestamp('delivered_at');
-            $table->timestamp('device_time')->nullable();          // cihazın saati (internetsiz girişte farklı olabilir)
+            // dateTime: MariaDB/MySQL'de NOT NULL timestamp her güncellemede o anki saate dönebilir
+            $table->dateTime('delivered_at');
+            $table->dateTime('device_time')->nullable();          // cihazın saati (internetsiz girişte farklı olabilir)
             $table->decimal('latitude', 10, 7)->nullable();
             $table->decimal('longitude', 10, 7)->nullable();
             $table->string('signature_path')->nullable();
             $table->string('photo_path')->nullable();
             $table->string('note', 1000)->nullable();
             $table->uuid('batch_uuid')->index();
-            $table->timestamp('cancelled_at')->nullable();
+            $table->dateTime('cancelled_at')->nullable();
             $table->foreignId('cancelled_by')->nullable()->constrained('users')->nullOnDelete();
             $table->string('cancel_reason', 500)->nullable();
             $table->timestamps();
