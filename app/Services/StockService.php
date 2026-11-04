@@ -245,6 +245,7 @@ class StockService
             'warehouse_id' => $row->warehouse_id,
             'user_id' => $user->id,
             'hospital_id' => $meta['hospital_id'] ?? null,
+            'delivery_id' => $meta['delivery_id'] ?? null,
             'quantity' => $delta,
             'balance_after' => round($balance, 2),
             'lot_number' => $row->lot_number,

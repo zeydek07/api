@@ -127,7 +127,7 @@ class MobileController extends Controller
 
     private function allowedWarehouses(User $user)
     {
-        $query = Warehouse::query()->where('is_active', true)->orderBy('name');
+        $query = Warehouse::query()->internal()->where('is_active', true)->orderBy('name');
 
         return $user->isSuperAdmin() ? $query : $query->whereHas('users', fn ($q) => $q->whereKey($user->id));
     }

@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\HospitalController;
+use App\Http\Controllers\Api\HospitalStructureController;
 use App\Http\Controllers\Api\MobileController;
 use App\Http\Controllers\Api\MovementController;
 use App\Http\Controllers\Api\ProductController;
@@ -72,6 +74,30 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::post('hospitals', [HospitalController::class, 'store'])->middleware('permission:hospitals.create');
     Route::put('hospitals/{hospital}', [HospitalController::class, 'update'])->middleware('permission:hospitals.update');
     Route::delete('hospitals/{hospital}', [HospitalController::class, 'destroy'])->middleware('permission:hospitals.delete');
+
+    // Konsinye teslimat belgeleri (kendi belgeleri; ekip/herkes görme yetkisine göre)
+    $seeDeliveries = 'permission:deliveries.create|deliveries.cancel|movements.view_team|movements.view_all';
+    Route::get('deliveries', [DeliveryController::class, 'index'])->middleware($seeDeliveries);
+    Route::get('deliveries/{id}', [DeliveryController::class, 'show'])->whereNumber('id')->middleware($seeDeliveries);
+    Route::get('deliveries/{id}/{kind}', [DeliveryController::class, 'proof'])->whereNumber('id')->whereIn('kind', ['signature', 'photo'])->middleware($seeDeliveries);
+    Route::post('deliveries', [DeliveryController::class, 'store'])->middleware(['permission:deliveries.create', 'throttle:usage']);
+    Route::post('deliveries/{id}/cancel', [DeliveryController::class, 'cancel'])->whereNumber('id')->middleware('permission:deliveries.cancel');
+
+    // Hastane yapısı: konsinye lokasyonları, hastane personeli, konsinye stok
+    Route::prefix('hospitals/{hospital}')->controller(HospitalStructureController::class)->group(function () {
+        Route::get('locations', 'locations')->middleware('permission:hospitals.view|deliveries.create');
+        Route::post('locations', 'storeLocation')->middleware('permission:hospitals.update');
+        Route::put('locations/{location}', 'updateLocation')->middleware('permission:hospitals.update');
+        Route::delete('locations/{location}', 'destroyLocation')->middleware('permission:hospitals.update');
+
+        Route::get('contacts', 'contacts')->middleware('permission:hospitals.view|deliveries.create');
+        // Teslimat sırasında "yeni kişi" eklenebilsin
+        Route::post('contacts', 'storeContact')->middleware('permission:hospitals.update|deliveries.create');
+        Route::put('contacts/{contact}', 'updateContact')->middleware('permission:hospitals.update');
+        Route::delete('contacts/{contact}', 'destroyContact')->middleware('permission:hospitals.update');
+
+        Route::get('consignment', 'consignment')->middleware('permission:hospitals.view|deliveries.create');
+    });
 
     // Depolar
     Route::get('warehouses', [WarehouseController::class, 'index'])->middleware('permission:warehouses.view');

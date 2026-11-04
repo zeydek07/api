@@ -15,7 +15,10 @@ class WarehouseController extends Controller
     {
         return response()->json(
             Warehouse::query()
-                ->with('users:id,name')
+                ->with(['users:id,name', 'hospital:id,name'])
+                // Hastane konsinye lokasyonları yalnızca istenirse gelir
+                ->when(! $request->boolean('include_consignment') && $request->type !== Warehouse::TYPE_CONSIGNMENT,
+                    fn ($q) => $q->internal())
                 ->when($request->filled('type'), fn ($q) => $q->where('type', $request->type))
                 ->when($request->has('is_active'), fn ($q) => $q->where('is_active', $request->boolean('is_active')))
                 ->orderBy('name')
@@ -43,6 +46,9 @@ class WarehouseController extends Controller
 
     public function update(Request $request, Warehouse $warehouse): JsonResponse
     {
+        if ($warehouse->isConsignment()) {
+            return $this->consignmentManagedElsewhere();
+        }
         $data = $this->validated($request, $warehouse);
         $warehouse->update($data);
         if (array_key_exists('user_ids', $data)) {
@@ -54,6 +60,9 @@ class WarehouseController extends Controller
 
     public function destroy(Warehouse $warehouse): JsonResponse
     {
+        if ($warehouse->isConsignment()) {
+            return $this->consignmentManagedElsewhere();
+        }
         if (StockMovement::where('warehouse_id', $warehouse->id)->exists()) {
             return response()->json(['message' => 'Hareket görmüş depo silinemez; pasife alabilirsiniz.'], 422);
         }
@@ -61,6 +70,11 @@ class WarehouseController extends Controller
         $warehouse->delete();
 
         return response()->json(['message' => 'Depo silindi.']);
+    }
+
+    private function consignmentManagedElsewhere(): JsonResponse
+    {
+        return response()->json(['message' => 'Konsinye lokasyonları ilgili hastanenin sayfasından yönetilir.'], 422);
     }
 
     private function validated(Request $request, ?Warehouse $warehouse = null): array

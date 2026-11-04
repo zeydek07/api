@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\Stock;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\DeliveryService;
 use App\Services\StockService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -20,6 +21,9 @@ use Illuminate\Support\Carbon;
 class DemoSeeder extends Seeder
 {
     public const PASSWORD = 'Demo1234!';
+
+    /** Örnek teslimatlarda kullanılan imza görseli (küçük bir PNG) */
+    private const SIGNATURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
     private const PRODUCTS = [
         // [ad, kategori, marka, birim, minimum]
@@ -217,6 +221,63 @@ class DemoSeeder extends Seeder
                     }
                 }
             }
+
+            // 5) Konsinye: sorumlu mümessil, hastane personeli, son 10 günde imzalı teslimatlar ve bir geri alma
+            $deliveries = app(DeliveryService::class);
+            $staff = [['Sorumlu hemşire', ['Ayşe Demir', 'Elif Şahin', 'Zeynep Kurt', 'Selin Arslan', 'Deniz Koç']],
+                ['Depo görevlisi', ['Murat Kaya', 'Hakan Yıldız', 'Burak Çelik', 'Gökhan Aydın', 'Emre Öztürk']]];
+            foreach ($hospitals as $i => $hospital) {
+                $rep = $reps->firstWhere('city', $hospital->city);
+                $hospital->update(['responsible_user_id' => $rep['user']->id]);
+                foreach ($staff as [$title, $names]) {
+                    $hospital->contacts()->create([
+                        'name' => $names[$i % count($names)], 'title' => $title,
+                        'phone' => sprintf('0532 4%02d %02d %02d', $i, mt_rand(10, 99), mt_rand(10, 99)),
+                        'location_id' => $hospital->locations()->value('id'),
+                    ]);
+                }
+            }
+
+            foreach ([9, 7, 5, 3, 1] as $daysAgo) {
+                foreach ($reps as $rep) {
+                    $this->at($daysAgo, 10 + mt_rand(0, 6), function () use ($deliveries, $rep, $hospitals) {
+                        $hospital = $hospitals->where('city', $rep['city'])->random();
+                        $rows = Stock::where('warehouse_id', $rep['bag']->id)->where('quantity', '>=', 1)
+                            ->whereDate('expiry_date', '>=', now())->get()->shuffle()->take(mt_rand(2, 4));
+                        if ($rows->isEmpty()) {
+                            return;
+                        }
+                        $contact = $hospital->contacts()->inRandomOrder()->first();
+                        $deliveries->create($rep['user'], [
+                            'type' => 'delivery',
+                            'hospital_id' => $hospital->id,
+                            'location_id' => $hospital->locations()->value('id'),
+                            'vehicle_id' => $rep['bag']->id,
+                            'contact_id' => $contact->id,
+                            'items' => $rows->map(fn ($s) => ['stock_id' => $s->id, 'quantity' => min((int) $s->quantity, mt_rand(1, 3))])->values()->all(),
+                            'signature' => self::SIGNATURE,
+                            'note' => mt_rand(0, 2) ? null : 'Konsinye dolabına yerleştirildi',
+                        ]);
+                    }, mt_rand(0, 59));
+                }
+            }
+
+            // Bir mümessil, SKT'si yaklaşan bir ürünü hastaneden geri alır
+            $this->at(0, 9, function () use ($deliveries, $reps) {
+                $rep = $reps->first();
+                $row = Stock::query()->whereHas('warehouse', fn ($w) => $w->where('type', 'consignment'))
+                    ->whereIn('warehouse_id', Warehouse::whereIn('hospital_id', Hospital::where('city', $rep['city'])->pluck('id'))->pluck('id'))
+                    ->where('quantity', '>', 0)->orderBy('expiry_date')->first();
+                if ($row) {
+                    $loc = Warehouse::find($row->warehouse_id);
+                    $deliveries->create($rep['user'], [
+                        'type' => 'return', 'hospital_id' => $loc->hospital_id, 'location_id' => $loc->id, 'vehicle_id' => $rep['bag']->id,
+                        'receiver_name' => 'Depo görevlisi',
+                        'items' => [['stock_id' => $row->id, 'quantity' => (float) $row->quantity]],
+                        'note' => "SKT'si yaklaştığı için geri alındı",
+                    ]);
+                }
+            });
         } finally {
             Carbon::setTestNow();
         }

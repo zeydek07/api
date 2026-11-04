@@ -58,9 +58,11 @@ class StockController extends Controller
             ...$this->itemRules(),
         ]);
 
-        $movements = $this->stock->receive(
-            $request->user(), Warehouse::findOrFail($data['warehouse_id']), $data['items'], $data,
-        );
+        $warehouse = Warehouse::findOrFail($data['warehouse_id']);
+        if ($warehouse->isConsignment()) {
+            return $this->viaDeliveries();
+        }
+        $movements = $this->stock->receive($request->user(), $warehouse, $data['items'], $data);
 
         return response()->json(['message' => 'Stok girişi yapıldı.', 'movements' => $movements], 201);
     }
@@ -76,13 +78,13 @@ class StockController extends Controller
             'items.*.stock_id' => ['nullable', 'integer'],
         ]);
 
-        $movements = $this->stock->transfer(
-            $request->user(),
-            Warehouse::findOrFail($data['from_warehouse_id']),
-            Warehouse::findOrFail($data['to_warehouse_id']),
-            $data['items'],
-            $data,
-        );
+        $from = Warehouse::findOrFail($data['from_warehouse_id']);
+        $to = Warehouse::findOrFail($data['to_warehouse_id']);
+        // Hastaneye bırakma / geri alma imzalı teslimat belgesiyle yapılır; aynı hastane içi taşıma serbest
+        if (($from->isConsignment() || $to->isConsignment()) && ! ($from->isConsignment() && $to->isConsignment() && $from->hospital_id === $to->hospital_id)) {
+            return $this->viaDeliveries();
+        }
+        $movements = $this->stock->transfer($request->user(), $from, $to, $data['items'], $data);
 
         return response()->json(['message' => 'Transfer yapıldı.', 'movements' => $movements], 201);
     }
@@ -114,6 +116,13 @@ class StockController extends Controller
             'message' => $movement ? 'Stok düzeltildi.' : 'Sayılan miktar sistemdekiyle aynı, değişiklik yapılmadı.',
             'movement' => $movement,
         ], $movement ? 201 : 200);
+    }
+
+    private function viaDeliveries(): JsonResponse
+    {
+        $message = 'Hastane konsinyesine ürün bırakma ve geri alma "Hastaneye Teslim" ekranından, imzalı belgeyle yapılır.';
+
+        return response()->json(['message' => $message, 'errors' => ['warehouse_id' => [$message]]], 422);
     }
 
     private function itemRules(): array

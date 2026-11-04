@@ -29,6 +29,10 @@ return [
             'transfer' => 'Depolar arası transfer',
             'adjust' => 'Sayım düzeltmesi',
         ]],
+        'deliveries' => ['label' => 'Konsinye Teslimat', 'actions' => [
+            'create' => 'Hastaneye teslim / geri alma',
+            'cancel' => 'Teslimat iptali',
+        ]],
         'usage' => ['label' => 'Saha Kullanımı', 'actions' => [
             'create' => 'Stoktan ürün düş / hastaneye teslim',
         ]],
@@ -47,7 +51,7 @@ return [
             'products.view', 'products.create', 'products.update',
             'hospitals.view', 'hospitals.create', 'hospitals.update',
             'warehouses.view', 'stock.view', 'stock.receive', 'stock.transfer', 'stock.adjust',
-            'usage.create', 'movements.view_team', 'reports.view',
+            'usage.create', 'deliveries.create', 'deliveries.cancel', 'movements.view_team', 'reports.view',
         ]],
         'personel' => ['name' => 'Saha Personeli', 'permissions' => [
             'products.view', 'usage.create',
@@ -55,10 +59,10 @@ return [
         'depocu' => ['name' => 'Depo Sorumlusu', 'permissions' => [
             'dashboard.view', 'products.view', 'products.create', 'products.update',
             'warehouses.view', 'stock.view', 'stock.receive', 'stock.transfer', 'stock.adjust',
-            'movements.view_all', 'reports.view',
+            'hospitals.view', 'movements.view_all', 'reports.view',
         ]],
         'mumessil' => ['name' => 'Mümessil', 'permissions' => [
-            'products.view', 'hospitals.view', 'usage.create',
+            'products.view', 'hospitals.view', 'usage.create', 'deliveries.create',
         ]],
     ],
 ];

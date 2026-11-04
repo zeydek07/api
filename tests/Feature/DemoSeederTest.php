@@ -2,20 +2,29 @@
 
 namespace Tests\Feature;
 
+use App\Models\Delivery;
 use App\Models\Hospital;
+use App\Models\HospitalContact;
 use App\Models\Product;
 use App\Models\Stock;
 use App\Models\StockMovement;
 use App\Models\User;
 use Database\Seeders\DemoSeeder;
+use Illuminate\Support\Facades\Storage;
 
 class DemoSeederTest extends ApiTestCase
 {
     public function test_demo_data_is_consistent_and_seeding_twice_is_safe(): void
     {
+        Storage::fake('local'); // imza dosyaları gerçek klasöre yazılmasın
         $this->seed(DemoSeeder::class);
 
         $this->assertSame(30, Product::count());
+        // Konsinye teslimatlar ve bir geri alma; her hastanenin sorumlusu ve personeli var
+        $this->assertGreaterThan(5, Delivery::where('type', 'delivery')->count());
+        $this->assertSame(1, Delivery::where('type', 'return')->count());
+        $this->assertSame(0, Hospital::whereNull('responsible_user_id')->count());
+        $this->assertSame(20, HospitalContact::count());
         $this->assertSame(10, Hospital::count());
         $this->assertSame(3, User::whereHas('role', fn ($q) => $q->where('slug', 'depocu'))->count());
         $this->assertSame(3, User::whereHas('role', fn ($q) => $q->where('slug', 'mumessil'))->count());

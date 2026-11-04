@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
+use App\Models\Stock;
 use App\Models\StockMovement;
+use App\Models\Warehouse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -16,6 +18,15 @@ class HospitalController extends Controller
         $since = now()->subDays(30)->startOfDay();
 
         $hospitals = Hospital::query()
+            ->select('hospitals.*')
+            // Hastanedeki konsinye ürün adedi (tüm lokasyonlar)
+            ->addSelect(['consignment_units' => Stock::query()
+                ->selectRaw('COALESCE(SUM(stocks.quantity), 0)')
+                ->join('warehouses', 'warehouses.id', '=', 'stocks.warehouse_id')
+                ->whereColumn('warehouses.hospital_id', 'hospitals.id')
+                ->where('warehouses.type', Warehouse::TYPE_CONSIGNMENT)
+                ->where('stocks.quantity', '>', 0)])
+            ->with('responsible:id,name')
             // Son 30 günde bu hastaneye yapılan teslimat kaydı sayısı
             ->withCount(['movements as deliveries_30d' => fn ($q) => $q
                 ->where('type', StockMovement::TYPE_USAGE)
@@ -26,6 +37,8 @@ class HospitalController extends Controller
                 ->orWhere('code', 'like', '%'.$request->q.'%')
                 ->orWhere('district', 'like', '%'.$request->q.'%')))
             ->when($request->filled('city'), fn ($q) => $q->where('city', $request->city))
+            ->when($request->filled('responsible_user_id'), fn ($q) => $q->where('responsible_user_id', $request->responsible_user_id))
+            ->when($request->boolean('mine'), fn ($q) => $q->where('responsible_user_id', $request->user()->id))
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->type))
             ->when($request->has('is_active'), fn ($q) => $q->where('is_active', $request->boolean('is_active')))
             ->orderBy('name')
@@ -79,7 +92,7 @@ class HospitalController extends Controller
             ->get();
 
         return response()->json([
-            'hospital' => $hospital,
+            'hospital' => $hospital->load('responsible:id,name'),
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
             'products' => $products,
@@ -102,6 +115,11 @@ class HospitalController extends Controller
 
     public function destroy(Hospital $hospital): JsonResponse
     {
+        $units = Stock::query()->whereIn('warehouse_id', $hospital->locations()->pluck('id'))->where('quantity', '>', 0)->sum('quantity');
+        if ($units > 0) {
+            return response()->json(['message' => 'Hastanede konsinye ürün var. Önce ürünleri geri alın.'], 422);
+        }
+
         // Soft delete: geçmiş teslimatlarda hastane adı görünmeye devam eder.
         $hospital->delete();
 
@@ -118,6 +136,7 @@ class HospitalController extends Controller
             'type' => ['sometimes', Rule::in(Hospital::TYPES)],
             'city' => ['nullable', 'string', Rule::in(array_values(config('provinces')))],
             // İlçe, seçilen (ya da kayıtlı) ile ait olmalı
+            'responsible_user_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'district' => ['nullable', 'string', function ($attr, $value, $fail) use ($request, $hospital) {
                 $city = $request->exists('city') ? $request->input('city') : $hospital?->city;
                 if (! $city) {
