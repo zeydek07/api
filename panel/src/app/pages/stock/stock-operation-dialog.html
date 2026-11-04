@@ -1,6 +1,6 @@
 <app-modal
   [title]="isReceive ? 'Stok girişi' : 'Depolar arası transfer'"
-  [subtitle]="isReceive ? 'Satın alma, iade vb. ile depoya gelen ürünler' : 'Örn. merkez depodan personelin çantasına'"
+  [subtitle]="isReceive ? 'Satın alma, iade vb. ile depoya gelen ürünler' : 'Örn. merkez depodan personelin aracına'"
 >
   <div class="grid gap-4 sm:grid-cols-2">
     <div>
@@ -34,40 +34,88 @@
     </div>
   </div>
 
+  @if (isReceive) {
+    <!-- Karekod okutma: el terminali klavye gibi yazıp Enter'a basar -->
+    <div class="mt-6 rounded-xl border border-dashed border-primary/40 bg-primary-soft p-4">
+      <label class="label flex items-center gap-1.5 text-primary-ink" for="op-scan">
+        <span class="icon text-[18px]">qr_code_scanner</span> Karekod okut
+      </label>
+      <input
+        #scanInput
+        id="op-scan"
+        class="input font-mono"
+        placeholder="Karekodu okutun ya da yapıştırıp Enter'a basın"
+        autocomplete="off"
+        [(ngModel)]="scanText"
+        (keydown.enter)="$event.preventDefault(); scan()"
+      />
+      <p class="hint">Ürün, lot, seri ve SKT karekoddan otomatik dolar. Aynı lot tekrar okutulursa miktar artar.</p>
+      @if (scanMessage()) {
+        <p class="mt-2 text-sm" [class.text-danger]="scanMessage()!.error" [class.text-ok]="!scanMessage()!.error">
+          {{ scanMessage()!.text }}
+        </p>
+      }
+    </div>
+  }
+
   <div class="mb-3 mt-6 flex items-center justify-between">
     <h3 class="text-sm font-semibold">Ürünler</h3>
-    <span class="text-xs text-muted">{{ validLines().length }} kalem</span>
+    <span class="text-xs text-muted">{{ validLines().length }} / {{ lines().length }} satır hazır</span>
   </div>
 
+  @if (!isReceive) {
+    <p class="hint -mt-2 mb-3 flex items-center gap-1.5">
+      <span class="icon text-[16px]">info</span>
+      Lot seçmenize gerek yok: SKT'si en yakın lottan başlanarak otomatik düşülür; lot ve SKT hedef depoya aynen geçer.
+    </p>
+  }
+
   <div class="overflow-hidden rounded-xl border border-line">
-    <div class="hidden grid-cols-[minmax(0,2fr)_110px_130px_150px_36px] gap-3 bg-surface-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted md:grid">
-      <span>Ürün</span><span>Miktar</span><span>Lot no</span><span>Son kullanma</span><span></span>
-    </div>
     @for (line of lines(); track $index; let i = $index) {
-      <div class="grid grid-cols-2 gap-3 border-t border-line p-3 first:border-t-0 md:grid-cols-[minmax(0,2fr)_110px_130px_150px_36px] md:items-center md:first:border-t">
-        <div class="col-span-2 md:col-span-1">
-          <app-product-picker [(product)]="line.product" (productChange)="touch()" />
+      <div class="border-t border-line p-3 first:border-t-0" [class.bg-danger-soft]="lineError(line)">
+        <div class="grid grid-cols-[1fr_auto] gap-3 sm:grid-cols-[minmax(0,1fr)_120px_auto] sm:items-start">
+          <div class="col-span-2 sm:col-span-1">
+            <app-product-picker [(product)]="line.product" (productChange)="touch()" placeholder="Ürün ara" />
+          </div>
+          <div class="relative">
+            <input
+              class="input tabular-nums"
+              [class.pr-12]="line.product"
+              type="number"
+              min="0"
+              placeholder="Miktar"
+              aria-label="Miktar"
+              [disabled]="isReceive && line.product?.tracking === 'serial'"
+              [(ngModel)]="line.quantity"
+              (ngModelChange)="touch()"
+            />
+            @if (line.product) {
+              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">{{ line.product.unit }}</span>
+            }
+          </div>
+          <button type="button" class="btn-icon danger mt-0.5" (click)="removeLine(i)" aria-label="Satırı sil">
+            <span class="icon">delete</span>
+          </button>
         </div>
-        <div class="relative">
-          <input
-            class="input tabular-nums"
-            [class.pr-12]="line.product"
-            type="number"
-            min="0"
-            placeholder="Miktar"
-            aria-label="Miktar"
-            [(ngModel)]="line.quantity"
-            (ngModelChange)="touch()"
-          />
-          @if (line.product) {
-            <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">{{ line.product.unit }}</span>
-          }
-        </div>
-        <input class="input" placeholder="Lot no" aria-label="Lot no" [(ngModel)]="line.lot_number" />
-        <input class="input" type="date" aria-label="Son kullanma tarihi" [(ngModel)]="line.expiry_date" />
-        <button type="button" class="btn-icon danger justify-self-end" (click)="removeLine(i)" aria-label="Satırı sil">
-          <span class="icon">delete</span>
-        </button>
+
+        @if (isReceive && line.product && line.product.tracking !== 'none') {
+          <div class="mt-2 grid gap-2 sm:grid-cols-3">
+            @if (line.product.tracking === 'serial') {
+              <input class="input font-mono" placeholder="Seri no *" aria-label="Seri numarası" [(ngModel)]="line.serial_number" (ngModelChange)="touch()" />
+            }
+            <input
+              class="input font-mono"
+              [placeholder]="line.product.tracking === 'lot' ? 'Lot no *' : 'Lot no'"
+              aria-label="Lot numarası"
+              [(ngModel)]="line.lot_number"
+              (ngModelChange)="touch()"
+            />
+            <input class="input" type="date" aria-label="Son kullanma tarihi" title="Son kullanma tarihi" [(ngModel)]="line.expiry_date" (ngModelChange)="touch()" />
+          </div>
+        }
+        @if (lineError(line); as msg) {
+          <p class="mt-1.5 text-xs text-danger">{{ msg }}</p>
+        }
       </div>
     }
   </div>
@@ -80,7 +128,7 @@
   <div modal-footer class="flex gap-2">
     <button type="button" class="btn btn-secondary" (click)="ref.close()">Vazgeç</button>
     <button type="button" class="btn btn-primary" (click)="save()" [disabled]="!canSave()">
-      {{ isReceive ? 'Girişi kaydet' : 'Transferi yap' }}
+      {{ isReceive ? 'Girişi kaydet' : 'Transferi yap' }} ({{ validLines().length }})
     </button>
   </div>
 </app-modal>

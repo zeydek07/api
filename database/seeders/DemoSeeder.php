@@ -100,7 +100,9 @@ class DemoSeeder extends Seeder
             ['code' => sprintf('MED-%03d', $i + 1)],
             [
                 'name' => $p[0], 'category' => $p[1], 'brand' => $p[2], 'unit' => $p[3],
-                'min_stock_level' => $p[4], 'barcode' => '8690'.str_pad((string) (100000000 + $i * 7919), 9, '0', STR_PAD_LEFT),
+                'min_stock_level' => $p[4], 'barcode' => $barcode = '8690'.str_pad((string) (100000000 + $i * 7919), 9, '0', STR_PAD_LEFT),
+                'gtin' => '0'.$barcode, // karekoddaki 14 haneli ürün numarası
+                'tracking' => Product::TRACKING_LOT,
                 'description' => "{$p[1]} grubunda örnek ürün.",
             ],
         ));
@@ -153,6 +155,14 @@ class DemoSeeder extends Seeder
                         'expiry_date' => now()->addMonths(mt_rand(10, 36))->toDateString(),
                     ])->values()->all(), ['reference' => 'FTR-2026-'.(1040 + $i), 'note' => 'Aylık tedarik']);
                 }
+
+                // Bazı ürünlerde SKT'si yakın küçük bir lot da var (SKT uyarıları ve "yakın olan önce" kuralı görünsün)
+                $stock->receive($keepers[0], $central, $products->only([0, 6, 10, 13, 19, 28])->map(fn ($p) => [
+                    'product_id' => $p->id,
+                    'quantity' => max(3, intdiv($p->min_stock_level, 2)),
+                    'lot_number' => 'KS'.mt_rand(1000, 9999),
+                    'expiry_date' => now()->addDays(21 + mt_rand(14, 90))->toDateString(),
+                ])->values()->all(), ['reference' => 'FTR-2026-1039', 'note' => 'Kısa miadlı parti']);
             });
 
             // 2) 20 ve 10 gün önce: mümessillerin araçlarına transfer

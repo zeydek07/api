@@ -31,10 +31,17 @@ class DemoSeederTest extends ApiTestCase
 
         // Stok hiçbir yerde eksiye düşmedi ve hareketlerle tutarlı
         $this->assertSame(0, Stock::where('quantity', '<', 0)->count());
+        // Her lot/seri satırı, o lota ait hareketlerin toplamına eşit olmalı
         foreach (Stock::all() as $s) {
-            $sum = StockMovement::where('warehouse_id', $s->warehouse_id)->where('product_id', $s->product_id)->sum('quantity');
-            $this->assertEquals((float) $s->quantity, (float) $sum);
+            $sum = StockMovement::where('warehouse_id', $s->warehouse_id)->where('product_id', $s->product_id)
+                ->where(fn ($q) => $s->lot_number === null ? $q->whereNull('lot_number') : $q->where('lot_number', $s->lot_number))
+                ->where(fn ($q) => $s->expiry_date === null ? $q->whereNull('expiry_date') : $q->whereDate('expiry_date', $s->expiry_date))
+                ->sum('quantity');
+            $this->assertEquals((float) $s->quantity, (float) $sum, "Stok satırı #{$s->id} hareketlerle uyuşmuyor");
         }
+
+        // Örnek ürünler lot numaralı; tüm stok satırlarında lot var
+        $this->assertSame(0, Stock::whereNull('lot_number')->where('quantity', '>', 0)->count());
 
         // Kritik stok örneği var
         $admin = $this->admin();

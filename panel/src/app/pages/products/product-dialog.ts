@@ -3,7 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { API_URL, errorMessage } from '../../core/api';
-import { Product } from '../../core/models';
+import { parseGs1 } from '../../core/gs1';
+import { Product, TRACKING_LABELS, Tracking } from '../../core/models';
 import { ModalFrame } from '../../ui/modal-frame';
 import { ToastService } from '../../ui/toast';
 
@@ -24,6 +25,39 @@ import { ToastService } from '../../ui/toast';
           <div>
             <label class="label" for="p-barcode">Barkod</label>
             <input id="p-barcode" class="input font-mono" formControlName="barcode" />
+          </div>
+          <div>
+            <label class="label" for="p-gtin">Karekod ürün numarası (GTIN)</label>
+            <input
+              id="p-gtin"
+              class="input font-mono"
+              formControlName="gtin"
+              placeholder="Karekodu okutun ya da yazın"
+              (keydown.enter)="$event.preventDefault(); fillFromScan()"
+              (blur)="fillFromScan()"
+            />
+            <p class="hint">Karekod okutulunca ürün numarası kendiliğinden ayrılır.</p>
+          </div>
+          <div>
+            <label class="label" for="p-tracking">Takip türü</label>
+            <select id="p-tracking" class="select" formControlName="tracking">
+              @for (t of trackings; track t) {
+                <option [value]="t">{{ trackingLabels[t] }}</option>
+              }
+            </select>
+            <p class="hint">
+              @switch (form.controls.tracking.value) {
+                @case ('serial') {
+                  Her birim ayrı seri numarasıyla izlenir (implant, protez vb.).
+                }
+                @case ('lot') {
+                  Girişte lot numarası zorunlu, SKT önerilir.
+                }
+                @default {
+                  Lot ve SKT tutulmaz.
+                }
+              }
+            </p>
           </div>
           <div>
             <label class="label" for="p-cat">Kategori</label>
@@ -87,6 +121,8 @@ export class ProductDialog {
     name: [this.data.product?.name ?? '', Validators.required],
     code: [this.data.product?.code ?? '', Validators.required],
     barcode: [this.data.product?.barcode ?? ''],
+    gtin: [this.data.product?.gtin ?? '', Validators.pattern(/^\d{8,14}$/)],
+    tracking: [this.data.product?.tracking ?? ('lot' as Tracking)],
     category: [this.data.product?.category ?? ''],
     brand: [this.data.product?.brand ?? ''],
     unit: [this.data.product?.unit ?? 'adet', Validators.required],
@@ -95,6 +131,17 @@ export class ProductDialog {
     is_active: [this.data.product?.is_active ?? true],
   });
 
+  protected readonly trackings = Object.keys(TRACKING_LABELS) as Tracking[];
+  protected readonly trackingLabels: Record<string, string> = TRACKING_LABELS;
+
+  /** GTIN alanına tam karekod okutulduysa yalnızca ürün numarasını bırak */
+  protected fillFromScan(): void {
+    const value = this.form.controls.gtin.value;
+    if (!value || /^\d{8,14}$/.test(value)) return;
+    const gtin = parseGs1(value).gtin;
+    if (gtin) this.form.controls.gtin.setValue(gtin);
+  }
+
   protected save(): void {
     this.saving.set(true);
     this.error.set('');
@@ -102,6 +149,7 @@ export class ProductDialog {
     // Boş metinleri null gönder (benzersiz barkod kontrolü boş metne takılmasın)
     const body = {
       ...raw,
+      gtin: raw.gtin || null,
       barcode: raw.barcode || null,
       category: raw.category || null,
       brand: raw.brand || null,

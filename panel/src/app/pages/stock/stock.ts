@@ -3,23 +3,28 @@ import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { merge } from 'rxjs';
+import { debounceTime, merge } from 'rxjs';
 import { API_URL, qty, toParams } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
 import { CanDirective } from '../../core/can.directive';
 import { Page, Stock, WAREHOUSE_LABELS, Warehouse } from '../../core/models';
+import { EXPIRY_CRITICAL_DAYS, EXPIRY_WARNING_DAYS, ExpiryBadge } from '../../ui/expiry-badge';
 import { openModal } from '../../ui/modal';
 import { Pagination } from '../../ui/pagination';
 import { AdjustDialog } from './adjust-dialog';
 import { StockOperation, StockOperationDialog } from './stock-operation-dialog';
 
+type ExpiryFilter = '' | 'warning' | 'critical' | 'expired';
+
 @Component({
-  imports: [ReactiveFormsModule, CanDirective, Pagination],
+  imports: [ReactiveFormsModule, CanDirective, Pagination, ExpiryBadge],
   templateUrl: './stock.html',
 })
 export class StockPage implements OnInit {
   /** /stok?depo=3 ile gelindiğinde ön seçim */
   readonly depo = input<string>();
+  /** /stok?skt=warning ile gelindiğinde SKT filtresi */
+  readonly skt = input<string>();
 
   private readonly http = inject(HttpClient);
   private readonly dialog = inject(Dialog);
@@ -32,17 +37,21 @@ export class StockPage implements OnInit {
   protected readonly qty = qty;
 
   protected readonly warehouseId = new FormControl<string>('', { nonNullable: true });
-  protected readonly lowStock = new FormControl(false, { nonNullable: true });
+  protected readonly q = new FormControl('', { nonNullable: true });
+  protected readonly expiry = signal<ExpiryFilter>('');
+  protected readonly expiryOptions: { v: ExpiryFilter; l: string }[] = [
+    { v: '', l: 'Tümü' },
+    { v: 'warning', l: `SKT yaklaşan (${EXPIRY_WARNING_DAYS} gün)` },
+    { v: 'critical', l: `Kritik (${EXPIRY_CRITICAL_DAYS} gün)` },
+    { v: 'expired', l: 'SKT geçmiş' },
+  ];
   private pageNo = 1;
   private perPage = 50;
 
   constructor() {
-    merge(this.warehouseId.valueChanges, this.lowStock.valueChanges)
+    merge(this.warehouseId.valueChanges, this.q.valueChanges.pipe(debounceTime(300)))
       .pipe(takeUntilDestroyed())
-      .subscribe(() => {
-        this.pageNo = 1;
-        this.load();
-      });
+      .subscribe(() => this.reset());
     // Depo listesi için warehouses.view gerekir; yoksa tüm depoların stoğu listelenir.
     if (this.auth.can('warehouses.view')) {
       this.http.get<Warehouse[]>(`${API_URL}/warehouses`).subscribe((w) => this.warehouses.set(w));
@@ -51,6 +60,18 @@ export class StockPage implements OnInit {
 
   ngOnInit(): void {
     if (this.depo()) this.warehouseId.setValue(this.depo()!, { emitEvent: false });
+    const skt = this.skt() as ExpiryFilter;
+    if (['warning', 'critical', 'expired'].includes(skt)) this.expiry.set(skt);
+    this.load();
+  }
+
+  protected setExpiry(v: ExpiryFilter): void {
+    this.expiry.set(v);
+    this.reset();
+  }
+
+  private reset(): void {
+    this.pageNo = 1;
     this.load();
   }
 
@@ -58,7 +79,8 @@ export class StockPage implements OnInit {
     this.loading.set(true);
     const params = toParams({
       warehouse_id: this.warehouseId.value,
-      low_stock: this.lowStock.value || '',
+      q: this.q.value,
+      expiry: this.expiry(),
       page: this.pageNo,
       per_page: this.perPage,
     });
@@ -80,18 +102,6 @@ export class StockPage implements OnInit {
     this.perPage = size;
     this.pageNo = 1;
     this.load();
-  }
-
-  protected isLow(s: Stock): boolean {
-    const min = s.product?.min_stock_level ?? 0;
-    return min > 0 && Number(s.quantity) <= min;
-  }
-
-  /** Minimum seviyeye göre doluluk (gösterge çubuğu için); minimumun 3 katı = dolu */
-  protected level(s: Stock): number {
-    const min = s.product?.min_stock_level ?? 0;
-    if (!min) return 100;
-    return Math.min(100, (Number(s.quantity) / (min * 3)) * 100);
   }
 
   protected operate(mode: StockOperation): void {

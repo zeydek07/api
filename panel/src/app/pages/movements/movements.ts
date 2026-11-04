@@ -121,6 +121,14 @@ export class MovementsPage implements OnInit {
     return Number(m.quantity) > 0;
   }
 
+  /** "SN 123 · LOT A41 · SKT 31.12.2027" */
+  protected traceText(m: Movement): string {
+    const skt = m.expiry_date ? m.expiry_date.slice(0, 10).split('-').reverse().join('.') : '';
+    return [m.serial_number && 'SN ' + m.serial_number, m.lot_number && 'LOT ' + m.lot_number, skt && 'SKT ' + skt]
+      .filter((x) => !!x)
+      .join(' · ');
+  }
+
   protected mapUrl(m: Movement): string | null {
     return m.latitude && m.longitude ? `https://www.google.com/maps?q=${m.latitude},${m.longitude}` : null;
   }

@@ -62,11 +62,22 @@ export interface PermissionGroup {
   permissions: { key: string; action: string; label: string }[];
 }
 
+export type Tracking = 'none' | 'lot' | 'serial';
+
+export const TRACKING_LABELS: Record<Tracking, string> = {
+  lot: 'Lot numaralı',
+  serial: 'Seri numaralı (her birim tek)',
+  none: 'Takipsiz',
+};
+
 export interface Product {
   id: number;
   name: string;
   code: string;
   barcode: string | null;
+  /** Karekoddaki ürün numarası, 14 hane */
+  gtin: string | null;
+  tracking: Tracking;
   category: string | null;
   brand: string | null;
   unit: string;
@@ -83,12 +94,17 @@ export interface Warehouse extends WarehouseRef {
   users?: { id: number; name: string }[];
 }
 
+/** Bir depodaki bir ürünün belirli lot/seri/SKT'li miktarı */
 export interface Stock {
   id: number;
   warehouse_id: number;
   product_id: number;
+  lot_number: string | null;
+  serial_number: string | null;
+  /** YYYY-MM-DD */
+  expiry_date: string | null;
   quantity: string;
-  product?: Pick<Product, 'id' | 'name' | 'code' | 'unit' | 'min_stock_level' | 'category' | 'barcode'>;
+  product?: Pick<Product, 'id' | 'name' | 'code' | 'unit' | 'min_stock_level' | 'category' | 'barcode' | 'gtin' | 'tracking'>;
   warehouse?: WarehouseRef;
 }
 
@@ -129,6 +145,7 @@ export interface Movement {
   quantity: string;
   balance_after: string;
   lot_number: string | null;
+  serial_number: string | null;
   expiry_date: string | null;
   reference: string | null;
   note: string | null;

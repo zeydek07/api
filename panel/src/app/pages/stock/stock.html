@@ -1,7 +1,7 @@
 <div class="page-head">
   <div class="flex-1">
     <h1 class="page-title">Stok Durumu</h1>
-    <p class="page-sub">Her depodaki güncel ürün miktarları.</p>
+    <p class="page-sub">Her depodaki ürünler lot, seri ve son kullanma tarihiyle.</p>
   </div>
   <div class="flex flex-wrap gap-2">
     <button class="btn btn-secondary" *appCan="'stock.adjust'" (click)="adjust()">
@@ -17,19 +17,32 @@
 </div>
 
 <div class="card">
-  <div class="flex flex-wrap items-center gap-4 border-b border-line p-4">
+  <div class="flex flex-wrap items-center gap-3 border-b border-line p-4">
+    <div class="relative min-w-56 flex-1">
+      <span class="icon pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-muted">search</span>
+      <input class="input pl-9" [formControl]="q" placeholder="Ürün, lot veya seri numarası ara" aria-label="Ara" />
+    </div>
     @if (warehouses().length) {
-      <select class="select w-64" [formControl]="warehouseId" aria-label="Depo">
+      <select class="select w-60" [formControl]="warehouseId" aria-label="Depo">
         <option value="">Tüm depolar</option>
         @for (w of warehouses(); track w.id) {
           <option [value]="w.id">{{ w.name }}</option>
         }
       </select>
     }
-    <label class="check">
-      <input type="checkbox" class="switch" [formControl]="lowStock" />
-      Yalnızca minimum seviyenin altındakiler
-    </label>
+    <div class="inline-flex flex-wrap rounded-lg border border-line bg-surface-2 p-0.5" role="group" aria-label="SKT filtresi">
+      @for (o of expiryOptions; track o.v) {
+        <button
+          type="button"
+          class="rounded-md px-3 py-1.5 text-[13px] font-medium transition"
+          [class]="expiry() === o.v ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'"
+          [attr.aria-pressed]="expiry() === o.v"
+          (click)="setExpiry(o.v)"
+        >
+          {{ o.l }}
+        </button>
+      }
+    </div>
   </div>
 
   @if (loading()) {
@@ -42,8 +55,9 @@
         <tr>
           <th>Ürün</th>
           <th>Depo</th>
+          <th>Lot / Seri</th>
+          <th>SKT</th>
           <th class="num">Miktar</th>
-          <th class="w-40">Seviye</th>
           <th class="actions"><span class="sr-only">İşlemler</span></th>
         </tr>
       </thead>
@@ -60,24 +74,21 @@
               <div class="text-ink">{{ s.warehouse?.name }}</div>
               <div class="cell-sub">{{ labels[s.warehouse?.type ?? ''] }}</div>
             </td>
-            <td class="num">
-              <span class="text-base font-semibold" [class.text-danger]="isLow(s)" [class.text-ink]="!isLow(s)">{{ qty(s.quantity) }}</span>
-              <span class="ms-1 text-muted">{{ s.product?.unit }}</span>
-            </td>
-            <td>
-              @if (s.product?.min_stock_level) {
-                <div class="flex items-center gap-2">
-                  <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2 ring-1 ring-inset ring-line">
-                    <div class="h-full rounded-full" [class]="isLow(s) ? 'bg-danger' : 'bg-ok'" [style.width.%]="level(s)"></div>
-                  </div>
-                  @if (isLow(s)) {
-                    <span class="badge badge-danger">Kritik</span>
-                  }
-                </div>
-                <div class="cell-sub">Min. {{ s.product?.min_stock_level }}</div>
-              } @else {
-                <span class="text-xs text-muted">Minimum tanımlı değil</span>
+            <td class="font-mono text-[13px]">
+              @if (s.serial_number) {
+                <div class="text-ink">SN {{ s.serial_number }}</div>
               }
+              @if (s.lot_number) {
+                <div [class.cell-sub]="s.serial_number" [class.text-ink]="!s.serial_number">LOT {{ s.lot_number }}</div>
+              }
+              @if (!s.serial_number && !s.lot_number) {
+                <span class="text-muted">—</span>
+              }
+            </td>
+            <td><app-expiry-badge [date]="s.expiry_date" /></td>
+            <td class="num whitespace-nowrap">
+              <span class="text-base font-semibold text-ink">{{ qty(s.quantity) }}</span>
+              <span class="ms-1 text-muted">{{ s.product?.unit }}</span>
             </td>
             <td class="actions">
               <button class="btn-icon" *appCan="'stock.adjust'" (click)="adjust(s)" title="Sayım düzeltmesi" aria-label="Sayım düzeltmesi">
@@ -87,11 +98,13 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="5" class="py-16 text-center">
+            <td colspan="6" class="py-16 text-center">
               @if (!loading()) {
-                <span class="icon text-[40px] text-muted">inventory_2</span>
-                <p class="mt-2 font-medium text-ink">Stok kaydı yok</p>
-                <p class="text-muted">“Stok girişi” ile depoya ürün ekleyerek başlayın.</p>
+                <span class="icon text-[40px] text-muted">{{ expiry() ? 'event_available' : 'inventory_2' }}</span>
+                <p class="mt-2 font-medium text-ink">{{ expiry() ? 'Bu SKT aralığında ürün yok' : 'Stok kaydı yok' }}</p>
+                @if (!expiry()) {
+                  <p class="text-muted">“Stok girişi” ile depoya ürün ekleyerek başlayın.</p>
+                }
               }
             </td>
           </tr>

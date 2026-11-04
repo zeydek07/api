@@ -35,9 +35,11 @@ class MobileController extends Controller
         $stocks = Stock::query()
             ->where('warehouse_id', $warehouse->id)
             ->where('quantity', '>', 0)
-            ->with('product:id,name,code,barcode,unit,category')
+            ->with('product:id,name,code,barcode,gtin,tracking,unit,category')
+            ->orderByRaw('CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('expiry_date')
             ->get()
-            ->sortBy('product.name')
+            ->sortBy('product.name') // ürün adına göre; aynı üründe SKT'si yakın lot önce (sıralama kararlı)
             ->values();
 
         return response()->json(['warehouse' => $warehouse->only(['id', 'name', 'code', 'type']), 'stocks' => $stocks]);
@@ -61,7 +63,10 @@ class MobileController extends Controller
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:100000'],
+            // Belirli bir lot/seri hedeflemek için; verilmezse SKT'si en yakın lottan düşülür
+            'items.*.stock_id' => ['nullable', 'integer'],
             'items.*.lot_number' => ['nullable', 'string', 'max:100'],
+            'items.*.serial_number' => ['nullable', 'string', 'max:100'],
             'items.*.expiry_date' => ['nullable', 'date'],
             'items.*.note' => ['nullable', 'string', 'max:1000'],
         ]);

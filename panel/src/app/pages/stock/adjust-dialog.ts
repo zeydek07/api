@@ -4,21 +4,34 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { API_URL, errorMessage, qty } from '../../core/api';
 import { Product, Stock, Warehouse } from '../../core/models';
+import { ExpiryBadge } from '../../ui/expiry-badge';
 import { ModalFrame } from '../../ui/modal-frame';
 import { ProductPicker } from '../../ui/product-picker';
 import { ToastService } from '../../ui/toast';
 
-/** Sayım sonucu girilir; sistem farkı otomatik hesaplayıp hareket olarak kaydeder. */
+/**
+ * Sayım düzeltmesi: belirli bir lot/seri satırı için sayılan miktar girilir,
+ * sistem farkı hesaplayıp hareket olarak kaydeder.
+ */
 @Component({
-  imports: [FormsModule, ModalFrame, ProductPicker],
+  imports: [FormsModule, ModalFrame, ProductPicker, ExpiryBadge],
   template: `
     <app-modal title="Sayım düzeltmesi" subtitle="Saydığınız miktarı girin; fark otomatik kaydedilir.">
       <div class="space-y-4">
         @if (data.stock; as s) {
-          <div class="rounded-xl bg-surface-2 p-4">
+          <div class="rounded-xl bg-surface-2 p-4 text-sm">
             <div class="font-medium text-ink">{{ s.product?.name }}</div>
-            <div class="text-sm text-muted">{{ s.warehouse?.name }}</div>
-            <div class="mt-2 text-sm">
+            <div class="text-muted">{{ s.warehouse?.name }}</div>
+            <div class="mt-2 flex flex-wrap items-center gap-2 font-mono text-[13px]">
+              @if (s.serial_number) {
+                <span class="badge">SN {{ s.serial_number }}</span>
+              }
+              @if (s.lot_number) {
+                <span class="badge">LOT {{ s.lot_number }}</span>
+              }
+              <app-expiry-badge [date]="s.expiry_date" />
+            </div>
+            <div class="mt-2">
               Sistemdeki miktar: <strong class="text-ink">{{ qty(s.quantity) }} {{ s.product?.unit }}</strong>
             </div>
           </div>
@@ -33,6 +46,27 @@ import { ToastService } from '../../ui/toast';
             </select>
           </div>
           <app-product-picker label="Ürün" [(product)]="product" />
+          @if (product && product.tracking !== 'none') {
+            <div class="grid gap-3 sm:grid-cols-2">
+              @if (product.tracking === 'serial') {
+                <div class="sm:col-span-2">
+                  <label class="label" for="adj-sn">Seri numarası</label>
+                  <input id="adj-sn" class="input font-mono" [(ngModel)]="serial" />
+                </div>
+              }
+              <div>
+                <label class="label" for="adj-lot">Lot numarası</label>
+                <input id="adj-lot" class="input font-mono" [(ngModel)]="lot" />
+              </div>
+              <div>
+                <label class="label" for="adj-skt">SKT</label>
+                <input id="adj-skt" class="input" type="date" [(ngModel)]="expiry" />
+              </div>
+              <p class="hint sm:col-span-2">
+                Depoda bu ürünün tek lotu varsa boş bırakabilirsiniz. Sayımda sistemde olmayan bir lot bulduysanız bilgilerini girin.
+              </p>
+            </div>
+          }
         }
         <div>
           <label class="label" for="adj-qty">Sayılan miktar</label>
@@ -67,6 +101,9 @@ export class AdjustDialog {
 
   protected warehouseId: number | null = this.data.stock?.warehouse_id ?? null;
   protected product: Product | null = null;
+  protected lot = '';
+  protected serial = '';
+  protected expiry = '';
   protected counted: number | null = this.data.stock ? Number(this.data.stock.quantity) : null;
   protected note = '';
   protected readonly saving = signal(false);
@@ -92,10 +129,16 @@ export class AdjustDialog {
   protected save(): void {
     this.saving.set(true);
     this.error.set('');
+    const s = this.data.stock;
     this.http
       .post<{ message: string }>(`${API_URL}/stocks/adjust`, {
         warehouse_id: this.warehouseId,
-        product_id: this.data.stock?.product_id ?? this.product?.id,
+        product_id: s?.product_id ?? this.product?.id,
+        // Tablodan açıldıysa o lot satırı; değilse girilen lot/seri
+        stock_id: s?.id ?? null,
+        lot_number: s ? null : this.lot || null,
+        serial_number: s ? null : this.serial || null,
+        expiry_date: s ? null : this.expiry || null,
         counted_quantity: this.counted,
         note: this.note,
       })

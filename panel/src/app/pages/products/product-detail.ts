@@ -2,11 +2,12 @@ import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
 import { HttpClient } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { API_URL, qty } from '../../core/api';
-import { Product, Stock, WAREHOUSE_LABELS } from '../../core/models';
+import { Product, Stock, TRACKING_LABELS, WAREHOUSE_LABELS } from '../../core/models';
+import { ExpiryBadge } from '../../ui/expiry-badge';
 import { ModalFrame } from '../../ui/modal-frame';
 
 @Component({
-  imports: [ModalFrame],
+  imports: [ModalFrame, ExpiryBadge],
   template: `
     <app-modal [title]="product()?.name ?? 'Ürün'" [subtitle]="product()?.code">
       @if (product(); as p) {
@@ -14,6 +15,14 @@ import { ModalFrame } from '../../ui/modal-frame';
           <div>
             <dt class="text-xs text-muted">Barkod</dt>
             <dd class="mt-0.5 font-mono text-ink">{{ p.barcode || '—' }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-muted">Karekod (GTIN)</dt>
+            <dd class="mt-0.5 font-mono text-ink">{{ p.gtin || '—' }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-muted">Takip türü</dt>
+            <dd class="mt-0.5 text-ink">{{ trackingLabels[p.tracking] }}</dd>
           </div>
           <div>
             <dt class="text-xs text-muted">Kategori</dt>
@@ -42,9 +51,17 @@ import { ModalFrame } from '../../ui/modal-frame';
           <p class="mt-4 text-sm text-ink-2">{{ p.description }}</p>
         }
 
-        <h3 class="mb-3 mt-6 text-sm font-semibold">Depolardaki stok</h3>
-        <div class="overflow-hidden rounded-xl border border-line">
+        <h3 class="mb-3 mt-6 text-sm font-semibold">Depolardaki stok · SKT'si yakın olan önce</h3>
+        <div class="table-wrap rounded-xl border border-line">
           <table class="table">
+            <thead>
+              <tr>
+                <th>Depo</th>
+                <th>{{ p.tracking === 'serial' ? 'Seri / Lot' : 'Lot' }}</th>
+                <th>SKT</th>
+                <th class="num">Miktar</th>
+              </tr>
+            </thead>
             <tbody>
               @for (s of stocks(); track s.id) {
                 <tr>
@@ -52,18 +69,25 @@ import { ModalFrame } from '../../ui/modal-frame';
                     <div class="cell-title">{{ s.warehouse?.name }}</div>
                     <div class="cell-sub">{{ labels[s.warehouse?.type ?? ''] }}</div>
                   </td>
-                  <td class="num font-medium text-ink">{{ qty(s.quantity) }} {{ p.unit }}</td>
+                  <td class="font-mono text-[13px]">
+                    @if (s.serial_number) {
+                      <div class="text-ink">SN {{ s.serial_number }}</div>
+                    }
+                    <div [class.cell-sub]="s.serial_number">{{ s.lot_number ? 'LOT ' + s.lot_number : '—' }}</div>
+                  </td>
+                  <td><app-expiry-badge [date]="s.expiry_date" /></td>
+                  <td class="num font-medium text-ink">{{ qty(s.quantity) }}<span class="ms-1 text-muted">{{ p.unit }}</span></td>
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="2" class="py-6 text-center text-muted">Hiçbir depoda stok yok.</td>
+                  <td colspan="4" class="py-6 text-center text-muted">Hiçbir depoda stok yok.</td>
                 </tr>
               }
             </tbody>
             <tfoot>
               <tr class="bg-surface-2">
-                <td class="font-semibold text-ink">Toplam</td>
-                <td class="num font-semibold text-ink">{{ qty(total()) }} {{ p.unit }}</td>
+                <td colspan="3" class="font-semibold text-ink">Toplam</td>
+                <td class="num font-semibold text-ink">{{ qty(total()) }}<span class="ms-1">{{ p.unit }}</span></td>
               </tr>
             </tfoot>
           </table>
@@ -87,6 +111,7 @@ export class ProductDetailDialog {
   protected readonly stocks = signal<Stock[]>([]);
   protected readonly total = signal(0);
   protected readonly labels: Record<string, string> = WAREHOUSE_LABELS;
+  protected readonly trackingLabels: Record<string, string> = TRACKING_LABELS;
   protected readonly qty = qty;
 
   constructor() {

@@ -63,7 +63,8 @@ abstract class ApiTestCase extends TestCase
         static $n = 0;
         $n++;
 
-        return Product::create(['name' => "Ürün {$n}", 'code' => "P{$n}", 'unit' => 'adet', ...$attrs]);
+        // Testlerde varsayılan takipsiz; lot/seri kuralları LotTrackingTest'te
+        return Product::create(['name' => "Ürün {$n}", 'code' => "P{$n}", 'unit' => 'adet', 'tracking' => 'none', ...$attrs]);
     }
 
     protected function warehouse(array $attrs = []): Warehouse

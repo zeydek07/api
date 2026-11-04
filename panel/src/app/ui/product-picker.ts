@@ -1,6 +1,6 @@
 import { CdkConnectedOverlay, CdkOverlayOrigin, ConnectedPosition } from '@angular/cdk/overlay';
 import { HttpClient } from '@angular/common/http';
-import { Component, inject, input, model, signal } from '@angular/core';
+import { Component, effect, inject, input, model, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime, switchMap } from 'rxjs';
 import { API_URL } from '../core/api';
@@ -91,6 +91,12 @@ export class ProductPicker {
   private readonly http = inject(HttpClient);
 
   constructor() {
+    // Ürün dışarıdan verildiğinde (ör. karekodla) adını kutuda göster
+    effect(() => {
+      const p = this.product();
+      if (p) this.text.set(p.name);
+    });
+
     this.query$
       .pipe(
         debounceTime(200),

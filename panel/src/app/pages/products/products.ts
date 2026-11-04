@@ -105,7 +105,7 @@ export class ProductsPage {
   }
 
   protected detail(product: Product): void {
-    openModal(this.dialog, ProductDetailDialog, product.id, 'md');
+    openModal(this.dialog, ProductDetailDialog, product.id, 'lg');
   }
 
   protected remove(product: Product): void {

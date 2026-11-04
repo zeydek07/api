@@ -104,11 +104,9 @@
               @if (m.reference) {
                 <div class="text-ink">{{ m.reference }}</div>
               }
-              @if (m.lot_number || m.expiry_date) {
-                <div class="cell-sub">
-                  {{ m.lot_number ? 'Lot ' + m.lot_number : '' }}{{ m.lot_number && m.expiry_date ? ' · ' : '' }}{{
-                    m.expiry_date ? 'SKT ' + (m.expiry_date | date: 'dd.MM.yyyy') : ''
-                  }}
+              @if (m.serial_number || m.lot_number || m.expiry_date) {
+                <div class="cell-sub font-mono">
+                  {{ traceText(m) }}
                 </div>
               }
               @if (m.note) {
