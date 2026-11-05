@@ -66,6 +66,7 @@ Roller panelden (`/api/roles`) değiştirilebilir, yeni rol eklenebilir.
 - Personel, yalnızca kendisine atanmış depolardan ürün düşebilir (`warehouse.user_ids` veya `user.warehouse_ids`).
 - Tipik akış: Merkez depoya **giriş**, ardından personelin çantasına **transfer**, ardından personel sahada **kullanım** kaydeder.
 - Stok eksiye düşemez. Çok satırlı bir işlemde tek satır başarısız olursa hiçbiri kaydedilmez.
+- **Saha işlemlerinde konum** (teslimat, geri alma, kullanım): konum yalnızca işlem anında alınır, gün boyu takip yapılmaz. İstek ya `latitude` + `longitude` (isteğe bağlı `location_accuracy`, metre) ya da konumun neden alınamadığını (`location_error`: `denied`, `unavailable`, `timeout`, `unsupported`) taşımak zorundadır; ikisi de yoksa istek reddedilir. Konumsuz kayıtlar engellenmez, işaretlenir: `GET /api/deliveries?location=missing`. Kural öncesindeki konumsuz kayıtlar `not_recorded` olarak işaretlidir.
 
 ## Uç noktalar
 

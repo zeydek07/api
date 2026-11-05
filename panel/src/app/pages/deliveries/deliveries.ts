@@ -26,7 +26,7 @@ import { Pagination } from '../../ui/pagination';
     </div>
 
     <div class="card">
-      <form class="grid gap-3 border-b border-line p-4 sm:grid-cols-2 lg:grid-cols-6" [formGroup]="filters">
+      <form class="grid gap-3 border-b border-line p-4 sm:grid-cols-2 lg:grid-cols-7" [formGroup]="filters">
         <div class="relative lg:col-span-2">
           <span class="icon pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-muted">search</span>
           <input class="input pl-9" formControlName="q" placeholder="Belge no veya teslim alan" aria-label="Ara" />
@@ -44,6 +44,11 @@ import { Pagination } from '../../ui/pagination';
             }
           </select>
         }
+        <select class="select" formControlName="location" aria-label="Konum">
+          <option value="">Konum: tümü</option>
+          <option value="ok">Konum alınmış</option>
+          <option value="missing">Konum alınamamış</option>
+        </select>
         <input class="input" type="date" formControlName="from" aria-label="Başlangıç" title="Başlangıç" />
         <input class="input" type="date" formControlName="to" aria-label="Bitiş" title="Bitiş" />
       </form>
@@ -73,6 +78,11 @@ import { Pagination } from '../../ui/pagination';
                     <span class="badge" [class]="d.type === 'return' ? 'badge-warn' : 'badge-primary'">{{ labels[d.type] }}</span>
                     @if (d.status === 'cancelled') {
                       <span class="badge badge-danger">İptal</span>
+                    }
+                    @if (d.location_status === 'missing') {
+                      <span class="badge badge-warn" title="İşlem anında konum alınamadı">
+                        <span class="icon text-[13px]">location_off</span> Konumsuz
+                      </span>
                     }
                   </div>
                 </td>
@@ -122,6 +132,7 @@ export class DeliveriesPage {
     q: [''],
     type: [''],
     hospital_id: [''],
+    location: [''],
     from: [''],
     to: [''],
   });

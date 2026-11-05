@@ -69,7 +69,7 @@ class StockFlowTest extends ApiTestCase
         $p = $this->product();
 
         $response = $this->withToken($this->tokenFor($staff))->postJson('/api/mobile/usages', [
-            'warehouse_id' => $bag->id, 'items' => [['product_id' => $p->id, 'quantity' => 1]],
+            'warehouse_id' => $bag->id, 'items' => [['product_id' => $p->id, 'quantity' => 1]], 'location_error' => 'denied',
         ])->assertStatus(422);
 
         $this->assertStringContainsString('yeterli stok yok', $response->json('errors.items.0'));
@@ -87,6 +87,7 @@ class StockFlowTest extends ApiTestCase
         $this->withToken($this->tokenFor($staff))->postJson('/api/mobile/usages', [
             'warehouse_id' => $bag->id,
             'items' => [['product_id' => $a->id, 'quantity' => 2], ['product_id' => $b->id, 'quantity' => 1]],
+            'location_error' => 'denied',
         ])->assertStatus(422);
 
         $this->assertSame(5.0, $this->stockOf($bag, $a->id));
@@ -100,7 +101,7 @@ class StockFlowTest extends ApiTestCase
         $p = $this->product();
 
         $this->withToken($this->tokenFor($staff))->postJson('/api/mobile/usages', [
-            'warehouse_id' => $central->id, 'items' => [['product_id' => $p->id, 'quantity' => 1]],
+            'warehouse_id' => $central->id, 'items' => [['product_id' => $p->id, 'quantity' => 1]], 'location_error' => 'denied',
         ])->assertStatus(403);
     }
 
@@ -113,7 +114,7 @@ class StockFlowTest extends ApiTestCase
         app(StockService::class)->receive($this->admin(), $bag, [['product_id' => $p->id, 'quantity' => 10]]);
 
         $token = $this->tokenFor($staff);
-        $payload = ['warehouse_id' => $bag->id, 'items' => [['product_id' => $p->id, 'quantity' => 4]]];
+        $payload = ['warehouse_id' => $bag->id, 'items' => [['product_id' => $p->id, 'quantity' => 4]], 'latitude' => 41.0, 'longitude' => 29.0];
         $headers = ['Idempotency-Key' => 'a8f1c2d3-0000-4000-8000-000000000001'];
 
         $first = $this->withToken($token)->postJson('/api/mobile/usages', $payload, $headers)->assertCreated();
@@ -192,5 +193,23 @@ class StockFlowTest extends ApiTestCase
         $this->assertSame(1, $res->json('daily_usage.13.count'));
         $this->assertSame('Enjektör', $res->json('top_products.0.name'));
         $this->assertEquals(3, $res->json('top_products.0.total_quantity'));
+    }
+
+    public function test_field_usage_requires_location_or_reason(): void
+    {
+        $staff = $this->userWithRole('personel');
+        $bag = $this->warehouse();
+        $bag->users()->attach($staff);
+        $p = $this->product();
+        app(StockService::class)->receive($this->admin(), $bag, [['product_id' => $p->id, 'quantity' => 5]]);
+        $token = $this->tokenFor($staff);
+        $base = ['warehouse_id' => $bag->id, 'items' => [['product_id' => $p->id, 'quantity' => 1]]];
+
+        $this->withToken($token)->postJson('/api/mobile/usages', $base)
+            ->assertStatus(422)->assertJsonValidationErrors('location_error');
+        $this->assertSame(5.0, $this->stockOf($bag, $p->id));
+
+        $this->withToken($token)->postJson('/api/mobile/usages', [...$base, 'location_error' => 'unavailable'])->assertCreated();
+        $this->assertDatabaseHas('stock_movements', ['type' => 'usage', 'latitude' => null, 'location_error' => 'unavailable']);
     }
 }

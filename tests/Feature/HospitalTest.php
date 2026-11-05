@@ -37,6 +37,7 @@ class HospitalTest extends ApiTestCase
             'warehouse_id' => $bag->id,
             'hospital_id' => $hospital->id,
             'items' => [['product_id' => $product->id, 'quantity' => 4]],
+            'latitude' => 40.9, 'longitude' => 29.18,
         ])->assertCreated()->assertJsonPath('movements.0.hospital.name', 'Şehir Hastanesi');
 
         $this->assertDatabaseHas('stock_movements', [
@@ -84,6 +85,7 @@ class HospitalTest extends ApiTestCase
             'warehouse_id' => $bag->id,
             'hospital_id' => $hospital->id,
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'location_error' => 'denied',
         ])->assertStatus(422)->assertJsonValidationErrors('hospital_id');
     }
 

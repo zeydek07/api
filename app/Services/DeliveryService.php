@@ -8,6 +8,7 @@ use App\Models\HospitalContact;
 use App\Models\Stock;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Support\CapturedLocation;
 use App\Models\Warehouse;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -77,8 +78,7 @@ class DeliveryService
                     'user_id' => $user->id,
                     'delivered_at' => now(),
                     'device_time' => $data['device_time'] ?? null,
-                    'latitude' => $data['latitude'] ?? null,
-                    'longitude' => $data['longitude'] ?? null,
+                    ...CapturedLocation::attributes($data),
                     'note' => $data['note'] ?? null,
                     'batch_uuid' => $batch,
                 ]);
@@ -92,8 +92,7 @@ class DeliveryService
                         'hospital_id' => $hospital->id,
                         'reference' => $delivery->number,
                         'note' => $data['note'] ?? null,
-                        'latitude' => $data['latitude'] ?? null,
-                        'longitude' => $data['longitude'] ?? null,
+                        ...CapturedLocation::attributes($data),
                     ],
                     $isReturn ? StockMovement::TYPE_RETURN_OUT : StockMovement::TYPE_CONSIGN_OUT,
                     $isReturn ? StockMovement::TYPE_RETURN_IN : StockMovement::TYPE_CONSIGN_IN,

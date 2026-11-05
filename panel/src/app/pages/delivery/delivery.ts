@@ -5,7 +5,8 @@ import { RouterLink } from '@angular/router';
 import { API_URL, errorMessage, qty } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
 import { parseGs1 } from '../../core/gs1';
-import { compressImage, currentPosition } from '../../core/image';
+import { compressImage } from '../../core/image';
+import { CapturedLocation, LOCATION_ERROR_LABELS, capturePosition } from '../../core/location';
 import {
   ConsignmentLocation,
   Delivery,
@@ -73,8 +74,10 @@ export class DeliveryPage implements OnInit {
   // 5. Kanıt
   protected readonly signature = signal<string | null>(null);
   protected readonly photo = signal<string | null>(null);
-  protected readonly position = signal<{ latitude: number; longitude: number } | null>(null);
+  // Konum sayfa açılınca önizleme için, kaydet anında da belge için yeniden alınır
+  protected readonly position = signal<CapturedLocation | null>(null);
   protected readonly positionState = signal<'pending' | 'ok' | 'none'>('pending');
+  protected readonly locationLabels = LOCATION_ERROR_LABELS;
   protected note = '';
 
   protected readonly saving = signal(false);
@@ -160,11 +163,12 @@ export class DeliveryPage implements OnInit {
     this.locate();
   }
 
-  protected locate(): void {
+  protected locate(): Promise<CapturedLocation> {
     this.positionState.set('pending');
-    currentPosition().then((p) => {
+    return capturePosition().then((p) => {
       this.position.set(p);
-      this.positionState.set(p ? 'ok' : 'none');
+      this.positionState.set(p.latitude !== undefined ? 'ok' : 'none');
+      return p;
     });
   }
 
@@ -359,10 +363,12 @@ export class DeliveryPage implements OnInit {
 
   // ---------------------------------------------------------------- kaydet
 
-  protected submit(): void {
+  protected async submit(): Promise<void> {
     if (!this.canSubmit()) return;
     this.saving.set(true);
     this.error.set('');
+    // İşlem anındaki konum; alınamazsa nedeni gönderilir ve belge "konum alınamadı" olarak işaretlenir
+    const location = await this.locate();
     const body = {
       type: this.mode(),
       hospital_id: this.hospital()!.id,
@@ -375,8 +381,7 @@ export class DeliveryPage implements OnInit {
       signature: this.signature(),
       photo: this.photo(),
       note: this.note.trim() || null,
-      latitude: this.position()?.latitude ?? null,
-      longitude: this.position()?.longitude ?? null,
+      ...location,
       device_time: new Date().toISOString(),
     };
 

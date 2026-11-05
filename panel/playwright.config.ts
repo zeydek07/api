@@ -31,6 +31,9 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     // Bilgisayardaki Chrome kullanılır; CI'da PW_CHANNEL boş bırakılıp chromium indirilir
     channel: process.env['PW_CHANNEL'] ?? 'chrome',
+    // Sahada konum işlem anında alınır: testlerde cihaz Kartal'da, izin verilmiş
+    permissions: ['geolocation'],
+    geolocation: { latitude: 40.9067, longitude: 29.1932, accuracy: 15 },
   },
   projects: [
     { name: 'oturum', testMatch: /auth\.setup\.ts/ },

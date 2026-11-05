@@ -374,13 +374,15 @@
                 <span class="icon text-[16px]">{{ positionState() === 'ok' ? 'location_on' : 'location_off' }}</span>
                 @switch (positionState()) {
                   @case ('ok') {
-                    Konum alındı; belgeye eklenecek.
+                    Konum alınabiliyor; kaydettiğiniz an yeniden alınıp belgeye eklenir.
                   }
                   @case ('pending') {
                     Konum alınıyor…
                   }
                   @default {
-                    Konum alınamadı (izin verilmedi). Belge konumsuz kaydedilir.
+                    <span class="text-warn">
+                      {{ locationLabels[position()?.location_error ?? 'unavailable'] }}. Belge “konum alınamadı” olarak işaretlenir.
+                    </span>
                     <button class="font-medium text-primary-ink hover:underline" (click)="locate()">Tekrar dene</button>
                   }
                 }

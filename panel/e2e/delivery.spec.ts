@@ -76,6 +76,9 @@ test.describe.serial('Konsinye teslimat (mümessil)', () => {
     await expect(page.locator('article')).toContainText(`LOT ${row.lot_number}`);
     await expect(page.getByAltText('Teslim alanın imzası')).toBeVisible();
     await expect(page.locator('article')).toContainText('mülkiyet firmada kalır');
+    // İşlem anındaki konum belgede
+    await expect(page.getByRole('link', { name: /İşlem konumunu haritada aç/ })).toHaveAttribute('href', /40\.9067.*29\.1932/);
+    await expect(page.locator('article')).toContainText('Konum doğruluğu ±15 m');
     // Mümessil iptal edemez
     await expect(page.getByRole('button', { name: /İptal et/ })).toHaveCount(0);
 
@@ -114,5 +117,35 @@ test.describe('Teslimat iptali (yönetici)', () => {
     await expect(page.locator('article').getByText('İptal edildi')).toBeVisible();
     await expect(page.locator('article')).toContainText('E2E: yanlışlıkla geri alındı');
     await expect(page.getByRole('button', { name: /İptal et/ })).toHaveCount(0);
+  });
+});
+
+test.describe('Konum izni verilmeyen cihaz (mümessil)', () => {
+  test.use({ storageState: USERS.mumessil.state, permissions: [] });
+
+  test('işlem yine kaydedilir ama "konum alınamadı" olarak işaretlenir ve ayrıca listelenir', async ({ page }) => {
+    await page.goto('/teslimat');
+    await page.getByRole('tab', { name: /Hastaneden geri al/ }).click();
+    await page.getByRole('button', { name: new RegExp(HOSPITAL) }).click();
+    await expect(page.getByText(/Konum izni verilmedi\. Belge .konum alınamadı. olarak işaretlenir/)).toBeVisible();
+
+    await page.locator('section li:has(input[type=number])').first().getByRole('button', { name: /artır/ }).click();
+    await page.locator('button.chip', { hasText: 'Depo görevlisi' }).first().click();
+    await page.getByRole('button', { name: /Geri almayı tamamla/ }).click();
+    await expect(page.getByRole('heading', { name: 'Geri alma kaydedildi' })).toBeVisible();
+    const number = (await page.locator('p.font-mono').first().textContent())!.trim();
+
+    await page.getByRole('link', { name: /Belgeyi görüntüle/ }).click();
+    await expect(page.locator('article')).toContainText('Konum alınamadı · Konum izni verilmedi');
+    await expect(page.getByRole('link', { name: /haritada aç/ })).toHaveCount(0);
+
+    // Konumsuz belgeler filtresinde çıkar, konumlu filtresinde çıkmaz
+    await page.goto('/teslimatlar');
+    await page.getByRole('combobox', { name: 'Konum' }).selectOption('missing');
+    const row = page.locator('tbody tr', { hasText: number });
+    await expect(row).toBeVisible();
+    await expect(row.getByText('Konumsuz')).toBeVisible();
+    await page.getByRole('combobox', { name: 'Konum' }).selectOption('ok');
+    await expect(page.locator('tbody tr', { hasText: number })).toHaveCount(0);
   });
 });

@@ -24,13 +24,13 @@ class Delivery extends Model
     protected $fillable = [
         'number', 'type', 'status', 'hospital_id', 'location_id', 'vehicle_id', 'contact_id',
         'receiver_name', 'receiver_title', 'user_id', 'delivered_at', 'device_time',
-        'latitude', 'longitude', 'signature_path', 'photo_path', 'note', 'batch_uuid',
+        'latitude', 'longitude', 'location_accuracy', 'location_error', 'signature_path', 'photo_path', 'note', 'batch_uuid',
         'cancelled_at', 'cancelled_by', 'cancel_reason',
     ];
 
     protected $hidden = ['signature_path', 'photo_path'];
 
-    protected $appends = ['has_signature', 'has_photo'];
+    protected $appends = ['has_signature', 'has_photo', 'location_status'];
 
     protected function casts(): array
     {
@@ -46,6 +46,12 @@ class Delivery extends Model
     public function getHasSignatureAttribute(): bool
     {
         return (bool) $this->signature_path;
+    }
+
+    /** ok: işlem anında konum alındı · missing: alınamadı (nedeni location_error'da) */
+    public function getLocationStatusAttribute(): string
+    {
+        return $this->latitude !== null ? 'ok' : 'missing';
     }
 
     public function getHasPhotoAttribute(): bool

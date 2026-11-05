@@ -179,6 +179,9 @@ export interface Delivery {
   device_time: string | null;
   latitude: string | null;
   longitude: string | null;
+  location_accuracy: number | null;
+  location_error: string | null;
+  location_status: 'ok' | 'missing';
   note: string | null;
   has_signature: boolean;
   has_photo: boolean;

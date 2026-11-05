@@ -85,6 +85,14 @@
             <span class="icon text-[14px] align-middle">location_on</span> İşlem konumunu haritada aç
           </a>
           <div class="hidden text-sm text-muted print:block">Konum: {{ doc.latitude }}, {{ doc.longitude }}</div>
+          @if (doc.location_accuracy) {
+            <div class="text-xs text-muted">Konum doğruluğu ±{{ doc.location_accuracy }} m</div>
+          }
+        } @else {
+          <div class="mt-1 inline-flex items-center gap-1 text-sm text-warn">
+            <span class="icon text-[16px]">location_off</span>
+            Konum alınamadı · {{ locationLabels[doc.location_error ?? 'unavailable'] }}
+          </div>
         }
       </div>
     </section>

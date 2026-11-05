@@ -255,6 +255,8 @@ class StockService
             'note' => $item['note'] ?? $meta['note'] ?? null,
             'latitude' => $meta['latitude'] ?? null,
             'longitude' => $meta['longitude'] ?? null,
+            'location_accuracy' => $meta['location_accuracy'] ?? null,
+            'location_error' => $meta['location_error'] ?? null,
         ]);
     }
 

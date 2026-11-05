@@ -37,7 +37,7 @@ class StockMovement extends Model
     protected $fillable = [
         'batch_uuid', 'type', 'product_id', 'warehouse_id', 'user_id', 'hospital_id', 'delivery_id',
         'quantity', 'balance_after', 'lot_number', 'serial_number', 'expiry_date',
-        'reference', 'note', 'latitude', 'longitude',
+        'reference', 'note', 'latitude', 'longitude', 'location_accuracy', 'location_error',
     ];
 
     protected function casts(): array

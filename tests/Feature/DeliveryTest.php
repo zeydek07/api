@@ -176,6 +176,7 @@ class DeliveryTest extends ApiTestCase
             'hospital_id' => $this->hospital->id, 'location_id' => $this->location->id, 'vehicle_id' => $this->bag->id,
             'receiver_name' => 'Depo görevlisi',
             'items' => [['stock_id' => $this->stockId('YAKIN', $this->location), 'quantity' => 2]],
+            'location_error' => 'timeout',
         ])->assertCreated()->json('delivery');
         $this->assertStringStartsWith('GA-', $ret['number']);
         $this->assertSame(2.0, (float) Stock::find($this->stockId('YAKIN', $this->location))->quantity);
@@ -226,5 +227,69 @@ class DeliveryTest extends ApiTestCase
         $this->withToken($this->tokenFor($this->rep))->postJson('/api/deliveries', $this->payload(['items' => [['stock_id' => $sid, 'quantity' => 1]]]))
             ->assertCreated();
         $this->assertSame($this->location->id, Stock::where('serial_number', 'SN-77')->where('quantity', 1)->value('warehouse_id'));
+    }
+
+    public function test_location_is_required_at_the_moment_of_the_operation(): void
+    {
+        $token = $this->tokenFor($this->rep);
+        $noLocation = $this->payload(['latitude' => null, 'longitude' => null]);
+
+        // Ne konum ne de neden: reddedilir, stok değişmez
+        $this->withToken($token)->postJson('/api/deliveries', $noLocation)
+            ->assertStatus(422)->assertJsonValidationErrors('location_error');
+        $this->assertSame(0, Delivery::count());
+
+        // Geçersiz neden reddedilir
+        $this->withToken($token)->postJson('/api/deliveries', [...$noLocation, 'location_error' => 'canim-istemedi'])
+            ->assertStatus(422)->assertJsonValidationErrors('location_error');
+
+        // Hem konum hem neden gönderilemez
+        $this->withToken($token)->postJson('/api/deliveries', $this->payload(['location_error' => 'denied']))
+            ->assertStatus(422)->assertJsonValidationErrors('location_error');
+
+        // Tek koordinat yetmez
+        $this->withToken($token)->postJson('/api/deliveries', $this->payload(['longitude' => null]))
+            ->assertStatus(422)->assertJsonValidationErrors('longitude');
+        $this->assertSame(0, Delivery::count());
+    }
+
+    public function test_location_with_accuracy_is_stored_on_document_and_movements(): void
+    {
+        $this->withToken($this->tokenFor($this->rep))
+            ->postJson('/api/deliveries', $this->payload(['location_accuracy' => 23.6]))
+            ->assertCreated()->assertJsonPath('delivery.location_status', 'ok');
+
+        $d = Delivery::first();
+        $this->assertSame(24, $d->location_accuracy);
+        $this->assertNull($d->location_error);
+        $this->assertSame(2, StockMovement::where('delivery_id', $d->id)->whereNotNull('latitude')->where('location_accuracy', 24)->count());
+    }
+
+    public function test_missing_location_is_marked_and_can_be_listed_separately(): void
+    {
+        $token = $this->tokenFor($this->rep);
+        $this->withToken($token)->postJson('/api/deliveries', $this->payload())->assertCreated();
+        $this->withToken($token)->postJson('/api/deliveries', $this->payload([
+            'latitude' => null, 'longitude' => null, 'location_error' => 'denied',
+            'items' => [['stock_id' => $this->stockId('YAKIN'), 'quantity' => 1]],
+        ]))->assertCreated()->assertJsonPath('delivery.location_status', 'missing')
+            ->assertJsonPath('delivery.location_error', 'denied');
+
+        $missing = Delivery::where('location_error', 'denied')->first();
+        $this->assertNull($missing->latitude);
+        $this->assertSame(2, StockMovement::where('delivery_id', $missing->id)->where('location_error', 'denied')->count());
+
+        $this->withToken($token)->getJson('/api/deliveries?location=missing')->assertOk()
+            ->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $missing->id);
+        $this->withToken($token)->getJson('/api/deliveries?location=ok')->assertOk()->assertJsonPath('total', 1);
+        $this->withToken($token)->getJson('/api/deliveries')->assertOk()->assertJsonPath('total', 2);
+    }
+
+    public function test_cancelling_from_the_office_needs_no_location(): void
+    {
+        $this->withToken($this->tokenFor($this->rep))->postJson('/api/deliveries', $this->payload())->assertCreated();
+        $this->withToken($this->tokenFor($this->manager))
+            ->postJson('/api/deliveries/'.Delivery::first()->id.'/cancel', ['reason' => 'Yanlış hastane'])
+            ->assertOk();
     }
 }

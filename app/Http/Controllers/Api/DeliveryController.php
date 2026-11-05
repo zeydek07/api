@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Models\User;
 use App\Services\DeliveryService;
+use App\Support\CapturedLocation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ class DeliveryController extends Controller
             'status' => ['nullable', Rule::in([Delivery::STATUS_COMPLETED, Delivery::STATUS_CANCELLED])],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
+            'location' => ['nullable', Rule::in(['ok', 'missing'])],
         ]);
 
         $page = self::scoped($request->user())
@@ -38,6 +40,9 @@ class DeliveryController extends Controller
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             ->when($request->filled('hospital_id'), fn ($q) => $q->where('hospital_id', $request->hospital_id))
             ->when($request->filled('user_id'), fn ($q) => $q->where('user_id', $request->user_id))
+            // Konumsuz kayıtlar ayrıca listelenebilir
+            ->when($request->location === 'ok', fn ($q) => $q->whereNotNull('latitude'))
+            ->when($request->location === 'missing', fn ($q) => $q->whereNull('latitude'))
             ->when($request->filled('q'), fn ($q) => $q->where(fn ($w) => $w
                 ->where('number', 'like', '%'.$request->q.'%')
                 ->orWhere('receiver_name', 'like', '%'.$request->q.'%')))
@@ -82,10 +87,9 @@ class DeliveryController extends Controller
             'signature' => ['nullable', 'string', 'max:900000'],   // data:image/png;base64,...
             'photo' => ['nullable', 'string', 'max:8500000'],
             'note' => ['nullable', 'string', 'max:1000'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            ...CapturedLocation::rules(),
             'device_time' => ['nullable', 'date'],
-        ]);
+        ], CapturedLocation::messages());
 
         $key = $request->header('Idempotency-Key');
         if ($key !== null && (strlen($key) < 8 || strlen($key) > 100)) {

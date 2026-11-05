@@ -9,6 +9,7 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\StockService;
+use App\Support\CapturedLocation;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,8 +59,7 @@ class MobileController extends Controller
             'hospital_id' => ['nullable', 'integer', Rule::exists('hospitals', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'reference' => ['nullable', 'string', 'max:255'],   // hasta / kurum / protokol no
             'note' => ['nullable', 'string', 'max:1000'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            ...CapturedLocation::rules(),
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:100000'],
@@ -69,7 +69,8 @@ class MobileController extends Controller
             'items.*.serial_number' => ['nullable', 'string', 'max:100'],
             'items.*.expiry_date' => ['nullable', 'date'],
             'items.*.note' => ['nullable', 'string', 'max:1000'],
-        ]);
+        ], CapturedLocation::messages());
+        $data = [...$data, ...CapturedLocation::attributes($data)];
 
         $key = $request->header('Idempotency-Key');
         if ($key !== null && (strlen($key) < 8 || strlen($key) > 100)) {

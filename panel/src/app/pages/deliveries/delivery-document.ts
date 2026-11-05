@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { API_URL, errorMessage, qty } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
+import { LOCATION_ERROR_LABELS } from '../../core/location';
 import { DELIVERY_LABELS, Delivery } from '../../core/models';
 import { ExpiryBadge } from '../../ui/expiry-badge';
 import { ModalFrame } from '../../ui/modal-frame';
@@ -122,6 +123,8 @@ export class DeliveryDocumentPage implements OnDestroy {
   protected units(): number {
     return (this.d()?.lines ?? []).reduce((s, l) => s + Number(l.quantity), 0);
   }
+
+  protected readonly locationLabels = LOCATION_ERROR_LABELS;
 
   protected mapUrl(): string | null {
     const d = this.d();

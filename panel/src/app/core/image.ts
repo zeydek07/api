@@ -25,15 +25,3 @@ export function compressImage(file: File, maxSide = 1600, quality = 0.82): Promi
     img.src = url;
   });
 }
-
-/** Cihaz konumunu alır; izin verilmezse ya da süre dolarsa null döner (teslimatı engellemez). */
-export function currentPosition(timeoutMs = 8000): Promise<{ latitude: number; longitude: number } | null> {
-  return new Promise((resolve) => {
-    if (!('geolocation' in navigator)) return resolve(null);
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ latitude: +p.coords.latitude.toFixed(7), longitude: +p.coords.longitude.toFixed(7) }),
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60000 },
-    );
-  });
-}
