@@ -41,7 +41,6 @@
         <tr>
           <th>Hastane</th>
           <th>Konum</th>
-          <th>Sorumlu</th>
           <th class="num">Konsinye stok</th>
           <th>Son teslimat</th>
           <th class="actions"><span class="sr-only">İşlemler</span></th>
@@ -73,13 +72,6 @@
               <div class="text-ink">{{ h.city || '—' }}</div>
               @if (h.district) {
                 <div class="cell-sub">{{ h.district }}</div>
-              }
-            </td>
-            <td class="whitespace-nowrap">
-              @if (h.responsible) {
-                <span class="text-ink">{{ h.responsible.name }}</span>
-              } @else {
-                <span class="text-muted">Atanmamış</span>
               }
             </td>
             <td class="num">
@@ -123,7 +115,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="6" class="py-16 text-center">
+            <td colspan="5" class="py-16 text-center">
               @if (!loading()) {
                 <span class="icon text-[40px] text-muted">domain_disabled</span>
                 <p class="mt-2 font-medium text-ink">Hastane bulunamadı</p>

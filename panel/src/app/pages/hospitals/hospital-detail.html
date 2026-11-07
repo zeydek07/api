@@ -26,9 +26,6 @@
           @if (d.hospital.code) {
             <span class="inline-flex items-center gap-1.5 font-mono"><span class="icon text-[16px]">tag</span>{{ d.hospital.code }}</span>
           }
-          <span class="inline-flex items-center gap-1.5" title="Hastaneye bakan firma personeli">
-            <span class="icon text-[16px]">badge</span>Sorumlu: {{ d.hospital.responsible?.name ?? 'atanmamış' }}
-          </span>
         </div>
         @if (d.hospital.notes) {
           <p class="mt-3 text-sm text-ink-2">{{ d.hospital.notes }}</p>
