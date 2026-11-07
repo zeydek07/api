@@ -44,7 +44,7 @@ class ProductController extends Controller
     {
         $product->load(['stocks' => fn ($q) => $q->where('quantity', '!=', 0)
             ->orderByRaw('CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END')->orderBy('expiry_date'),
-            'stocks.warehouse:id,name,code,type,hospital_id', 'stocks.warehouse.hospital:id,name']);
+            'stocks.warehouse:id,name,path,code,type,hospital_id', 'stocks.warehouse.hospital:id,name']);
 
         return response()->json($product);
     }

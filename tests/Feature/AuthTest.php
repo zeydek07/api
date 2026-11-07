@@ -40,7 +40,7 @@ class AuthTest extends ApiTestCase
 
         $this->assertNotEmpty($response->json('token'));
         $this->assertNotNull($response->json('expires_at'));
-        $this->assertEqualsCanonicalizing(['products.view', 'usage.create'], $response->json('user.permissions'));
+        $this->assertEqualsCanonicalizing(['products.view', 'hospitals.view', 'usage.create', 'deliveries.create'], $response->json('user.permissions'));
 
         $this->withToken($response->json('token'))->getJson('/api/auth/me')
             ->assertOk()->assertJsonPath('user.email', $user->email);

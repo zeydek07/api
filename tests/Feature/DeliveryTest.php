@@ -34,7 +34,7 @@ class DeliveryTest extends ApiTestCase
         Storage::fake('local');
 
         $this->manager = $this->userWithRole('yonetici');
-        $this->rep = $this->userWithRole('mumessil', ['manager_id' => $this->manager->id]);
+        $this->rep = $this->userWithRole('personel', ['manager_id' => $this->manager->id]);
         $this->bag = $this->warehouse(['name' => 'Can - Araç']);
         $this->bag->users()->attach($this->rep);
         $this->hospital = Hospital::create(['name' => 'Kartal Devlet Hastanesi']);
@@ -207,7 +207,7 @@ class DeliveryTest extends ApiTestCase
         $this->withToken($this->tokenFor($this->rep))->postJson('/api/deliveries', $this->payload())->assertCreated();
         $id = Delivery::first()->id;
 
-        $otherRep = $this->userWithRole('mumessil');
+        $otherRep = $this->userWithRole('personel');
         $this->withToken($this->tokenFor($otherRep))->getJson("/api/deliveries/{$id}")->assertNotFound();
         $this->withToken($this->tokenFor($otherRep))->getJson('/api/deliveries')->assertOk()->assertJsonPath('total', 0);
 

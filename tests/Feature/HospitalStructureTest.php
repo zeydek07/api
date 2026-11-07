@@ -35,8 +35,8 @@ class HospitalStructureTest extends ApiTestCase
         $main = $h->locations()->first();
 
         // Aynı adla ikinci lokasyon açılamaz, farklı adla açılır
-        $this->withToken($token)->postJson("/api/hospitals/{$h->id}/locations", ['name' => 'Ana konsinye deposu'])->assertStatus(422);
-        $or = $this->withToken($token)->postJson("/api/hospitals/{$h->id}/locations", ['name' => 'Ameliyathane dolabı'])->assertCreated()->json();
+        $this->withToken($token)->postJson("/api/hospitals/{$h->id}/locations", ['name' => 'Ana konsinye deposu', 'level' => 'depo'])->assertStatus(422);
+        $or = $this->withToken($token)->postJson("/api/hospitals/{$h->id}/locations", ['name' => 'Ameliyathane dolabı', 'level' => 'dolap'])->assertCreated()->json();
         $this->assertSame("KNS-{$h->id}-2", $or['code']);
 
         // Son aktif lokasyon kapatılamaz
@@ -54,10 +54,54 @@ class HospitalStructureTest extends ApiTestCase
         $this->assertContains('Ana konsinye deposu', array_column($this->withToken($token)->getJson('/api/warehouses?include_consignment=1')->json(), 'name'));
     }
 
+    public function test_locations_form_a_tree_with_paths_and_rolled_up_totals(): void
+    {
+        $h = Hospital::create(['name' => 'Ağaç Hastanesi']);
+        $token = $this->adminToken();
+        $url = "/api/hospitals/{$h->id}/locations";
+
+        $ortho = $this->withToken($token)->postJson($url, ['name' => 'Ortopedi', 'level' => 'bolum'])->assertCreated()->json();
+        $room = $this->withToken($token)->postJson($url, ['name' => 'Ameliyathane 2', 'level' => 'oda', 'parent_id' => $ortho['id']])->assertCreated()->json();
+        $cab = $this->withToken($token)->postJson($url, ['name' => 'Dolap A', 'level' => 'dolap', 'parent_id' => $room['id']])->assertCreated()->json();
+        $shelf = $this->withToken($token)->postJson($url, ['name' => 'Raf 3', 'level' => 'raf', 'parent_id' => $cab['id']])->assertCreated()->json();
+        $this->assertSame('Ortopedi › Ameliyathane 2 › Dolap A › Raf 3', $shelf['path']);
+
+        // Sıra bozulamaz: dolabın altına oda, rafın altına raf eklenemez
+        $this->withToken($token)->postJson($url, ['name' => 'X', 'level' => 'oda', 'parent_id' => $cab['id']])->assertStatus(422)->assertJsonValidationErrors('level');
+        $this->withToken($token)->postJson($url, ['name' => 'X', 'level' => 'raf', 'parent_id' => $shelf['id']])->assertStatus(422);
+        // Aynı ad farklı dolaplarda olabilir, aynı dolapta olamaz
+        $cabB = $this->withToken($token)->postJson($url, ['name' => 'Dolap B', 'level' => 'dolap', 'parent_id' => $room['id']])->assertCreated()->json();
+        $this->withToken($token)->postJson($url, ['name' => 'Raf 3', 'level' => 'raf', 'parent_id' => $cabB['id']])->assertCreated();
+        $this->withToken($token)->postJson($url, ['name' => 'Raf 3', 'level' => 'raf', 'parent_id' => $cab['id']])->assertStatus(422);
+        // Başka hastanenin lokasyonu üst lokasyon olamaz
+        $other = Hospital::create(['name' => 'Diğer'])->locations()->first();
+        $this->withToken($token)->postJson($url, ['name' => 'Y', 'level' => 'dolap', 'parent_id' => $other->id])->assertStatus(422);
+
+        // Rafa konan ürün üst seviyelerin toplamında görünür
+        $product = $this->product();
+        Stock::create(['warehouse_id' => $shelf['id'], 'product_id' => $product->id, 'quantity' => 5, 'lot_key' => '']);
+        $rows = collect($this->withToken($token)->getJson($url)->assertOk()->json())->keyBy('id');
+        $this->assertEquals(5, $rows[$ortho['id']]['total_units']);
+        $this->assertEquals(5, $rows[$cab['id']]['total_units']);
+        $this->assertEquals(0, $rows[$cabB['id']]['total_units']);
+        $this->assertSame(3, $rows[$shelf['id']]['depth']);
+        // Bölüm seçilince alttaki raftaki ürün de konsinye listesinde gelir
+        $this->assertCount(1, $this->withToken($token)->getJson("/api/hospitals/{$h->id}/consignment?location_id={$ortho['id']}")->json('rows'));
+        $this->assertCount(0, $this->withToken($token)->getJson("/api/hospitals/{$h->id}/consignment?location_id={$cabB['id']}")->json('rows'));
+
+        // Ad değişince alt lokasyonların yolu güncellenir
+        $this->withToken($token)->putJson("{$url}/{$ortho['id']}", ['name' => 'Ortopedi ve Travmatoloji'])->assertOk();
+        $this->assertSame('Ortopedi ve Travmatoloji › Ameliyathane 2 › Dolap A › Raf 3', Warehouse::find($shelf['id'])->path);
+
+        // Alt lokasyonu olan silinemez; altında aktif lokasyon varken pasife alınamaz
+        $this->withToken($token)->deleteJson("{$url}/{$cabB['id']}")->assertStatus(422);
+        $this->withToken($token)->putJson("{$url}/{$room['id']}", ['is_active' => false])->assertStatus(422);
+    }
+
     public function test_contacts_can_be_quick_added_by_representative_but_not_edited(): void
     {
         $h = Hospital::create(['name' => 'H']);
-        $rep = $this->userWithRole('mumessil');
+        $rep = $this->userWithRole('personel');
         $token = $this->tokenFor($rep);
 
         $c = $this->withToken($token)->postJson("/api/hospitals/{$h->id}/contacts", [
@@ -77,7 +121,7 @@ class HospitalStructureTest extends ApiTestCase
 
     public function test_responsible_rep_and_consignment_units_in_list(): void
     {
-        $rep = $this->userWithRole('mumessil');
+        $rep = $this->userWithRole('personel');
         $token = $this->adminToken();
         $id = $this->withToken($token)->postJson('/api/hospitals', ['name' => 'Sorumlu Testi', 'responsible_user_id' => $rep->id])->assertCreated()->json('id');
 

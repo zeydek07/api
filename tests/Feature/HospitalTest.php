@@ -10,7 +10,7 @@ class HospitalTest extends ApiTestCase
 {
     private function setUpDelivery(): array
     {
-        $rep = $this->userWithRole('mumessil');
+        $rep = $this->userWithRole('personel');
         $bag = $this->warehouse(['name' => 'Mümessil çanta']);
         $bag->users()->attach($rep);
         $product = $this->product(['name' => 'Kateter']);
@@ -22,7 +22,7 @@ class HospitalTest extends ApiTestCase
 
     public function test_default_roles_exist(): void
     {
-        $this->assertTrue(Role::where('slug', 'mumessil')->exists());
+        $this->assertTrue(Role::where('slug', 'personel')->exists());
         $this->assertTrue(Role::where('slug', 'depocu')->exists());
     }
 
@@ -119,7 +119,7 @@ class HospitalTest extends ApiTestCase
     {
         $this->getJson('/api/provinces')->assertStatus(401);
 
-        $list = $this->withToken($this->tokenFor($this->userWithRole('mumessil')))
+        $list = $this->withToken($this->tokenFor($this->userWithRole('personel')))
             ->getJson('/api/provinces')->assertOk()->json();
 
         $this->assertCount(81, $list);
@@ -135,7 +135,7 @@ class HospitalTest extends ApiTestCase
 
     public function test_districts_endpoint_returns_973_districts_in_total(): void
     {
-        $token = $this->tokenFor($this->userWithRole('mumessil'));
+        $token = $this->tokenFor($this->userWithRole('personel'));
 
         $istanbul = $this->withToken($token)->getJson('/api/provinces/34/districts')->assertOk()->json();
         $this->assertCount(39, $istanbul);

@@ -88,7 +88,7 @@ class HospitalController extends Controller
             ->get();
 
         $latest = $base()
-            ->with(['product:id,name,code,unit', 'user:id,name', 'warehouse:id,name'])
+            ->with(['product:id,name,code,unit', 'user:id,name', 'warehouse:id,name,path'])
             ->latest('id')
             ->limit(30)
             ->get();

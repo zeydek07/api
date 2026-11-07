@@ -25,7 +25,7 @@ class MovementController extends Controller
         ]);
 
         $movements = self::scoped($request->user())
-            ->with(['product:id,name,code,unit', 'warehouse:id,name,code,type,hospital_id', 'warehouse.hospital:id,name', 'delivery:id,number,type', 'user:id,name', 'hospital:id,name,city'])
+            ->with(['product:id,name,code,unit', 'warehouse:id,name,path,code,type,hospital_id', 'warehouse.hospital:id,name', 'delivery:id,number,type', 'user:id,name', 'hospital:id,name,city'])
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->type))
             ->when($request->filled('user_id'), fn ($q) => $q->where('user_id', $request->user_id))
             ->when($request->filled('product_id'), fn ($q) => $q->where('product_id', $request->product_id))

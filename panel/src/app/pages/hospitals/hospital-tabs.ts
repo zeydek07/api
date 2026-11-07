@@ -6,7 +6,17 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { API_URL, errorMessage, qty } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
-import { ConsignmentLocation, DELIVERY_LABELS, Delivery, HospitalContact, Page, Stock } from '../../core/models';
+import {
+  ConsignmentLocation,
+  DELIVERY_LABELS,
+  Delivery,
+  HospitalContact,
+  LOCATION_LEVELS,
+  LocationLevel,
+  Page,
+  Stock,
+  subtreeIds,
+} from '../../core/models';
 import { confirm } from '../../ui/confirm';
 import { ExpiryBadge } from '../../ui/expiry-badge';
 import { ModalFrame } from '../../ui/modal-frame';
@@ -48,7 +58,12 @@ interface ConsignmentResponse {
         <div class="mb-3 flex flex-wrap gap-2">
           <button class="chip" [class.chip-on]="!locationId()" (click)="locationId.set(null)">Tüm lokasyonlar</button>
           @for (l of locations(); track l.id) {
-            <button class="chip" [class.chip-on]="locationId() === l.id" (click)="locationId.set(l.id)">{{ l.name }}</button>
+            <button class="chip" [class.chip-on]="locationId() === l.id" (click)="locationId.set(l.id)">
+              {{ l.path || l.name }}
+              @if (l.total_units) {
+                <span class="opacity-70">· {{ qty(l.total_units) }}</span>
+              }
+            </button>
           }
         </div>
       }
@@ -72,7 +87,7 @@ interface ConsignmentResponse {
                     <div class="cell-title">{{ s.product?.name }}</div>
                     <div class="cell-sub font-mono">{{ s.product?.code }}</div>
                   </td>
-                  <td>{{ s.warehouse?.name }}</td>
+                  <td>{{ s.warehouse?.path || s.warehouse?.name }}</td>
                   <td class="font-mono text-[13px]">
                     @if (s.serial_number) {
                       <div>SN {{ s.serial_number }}</div>
@@ -115,7 +130,10 @@ export class HospitalConsignmentTab {
   protected readonly visible = computed(() => {
     const id = this.locationId();
     const rows = this.data()?.rows ?? [];
-    return id ? rows.filter((r) => r.warehouse_id === id) : rows;
+    if (!id) return rows;
+    // Bölüm/oda seçilince altındaki dolap ve raflardaki ürünler de görünür
+    const ids = subtreeIds(id, this.locations());
+    return rows.filter((r) => ids.has(r.warehouse_id));
   });
 
   constructor() {
@@ -158,7 +176,7 @@ export class HospitalConsignmentTab {
                   </div>
                 </td>
                 <td class="whitespace-nowrap">{{ d.delivered_at | date: 'dd.MM.yyyy HH:mm' }}</td>
-                <td>{{ d.location?.name }}</td>
+                <td>{{ d.location?.path || d.location?.name }}</td>
                 <td>{{ d.receiver_name }}</td>
                 <td>{{ d.user?.name }}</td>
                 <td class="num">{{ qty(d.units) }} <span class="cell-sub block">{{ d.lines_count }} kalem</span></td>
@@ -225,7 +243,7 @@ export class HospitalDeliveriesTab {
             <select id="hc-loc" class="select" [(ngModel)]="form.location_id">
               <option [ngValue]="null">— Tüm lokasyonlar —</option>
               @for (l of data.locations; track l.id) {
-                <option [ngValue]="l.id">{{ l.name }}</option>
+                <option [ngValue]="l.id">{{ l.path || l.name }}</option>
               }
             </select>
             <p class="hint">Teslimatta bu lokasyon seçilince önce bu kişi önerilir.</p>
@@ -310,7 +328,7 @@ export class ContactDialog {
                 }
               </div>
               <div class="text-xs text-muted">
-                {{ c.title || 'Görevi belirtilmemiş' }}{{ c.location ? ' · ' + c.location.name : '' }}
+                {{ c.title || 'Görevi belirtilmemiş' }}{{ c.location ? ' · ' + (c.location.path || c.location.name) : '' }}
               </div>
             </div>
             <div class="flex flex-wrap gap-3 text-sm">
@@ -387,6 +405,10 @@ export class HospitalContactsTab {
 
 // =============================================================== Lokasyonlar
 
+/**
+ * Hastane içi lokasyon ağacı: bölüm › oda / depo › dolap › raf.
+ * Her satırın altına daha alt seviyede lokasyon eklenebilir.
+ */
 @Component({
   selector: 'app-hospital-locations',
   imports: [FormsModule],
@@ -395,42 +417,90 @@ export class HospitalContactsTab {
       <div class="card-head">
         <div class="flex-1">
           <h2 class="card-title">Konsinye lokasyonları</h2>
-          <p class="text-xs text-muted">Ürünlerin hastanede durduğu yerler. Sayım ve teslimat lokasyon bazında yapılır.</p>
+          <p class="text-xs text-muted">
+            Ürünlerin hastanede durduğu yerler: bölüm › oda / depo › dolap › raf. Teslimat, kullanım ve sayım lokasyon bazında yapılır.
+          </p>
         </div>
       </div>
       <ul class="divide-y divide-line">
         @for (l of locations(); track l.id) {
-          <li class="flex flex-wrap items-center gap-3 px-5 py-3" [class.opacity-60]="!l.is_active">
-            <div class="grid size-9 place-items-center rounded-lg bg-primary-soft text-primary-ink"><span class="icon text-[18px]">shelves</span></div>
-            <div class="min-w-48 flex-1">
-              @if (editingId() === l.id) {
-                <input class="input h-8" [(ngModel)]="editName" (keydown.enter)="rename(l)" (keydown.escape)="editingId.set(null)" aria-label="Lokasyon adı" />
-              } @else {
-                <div class="text-sm font-medium text-ink">
-                  {{ l.name }}
-                  @if (!l.is_active) {
-                    <span class="badge ms-1">Pasif</span>
+          <li class="px-5 py-3" [class.opacity-60]="!l.is_active">
+            <div class="flex flex-wrap items-center gap-3" [style.padding-inline-start.px]="(l.depth ?? 0) * 28">
+              @if (l.depth) {
+                <span class="icon -me-1 text-[18px] text-muted" aria-hidden="true">subdirectory_arrow_right</span>
+              }
+              <div class="grid size-9 place-items-center rounded-lg bg-primary-soft text-primary-ink">
+                <span class="icon text-[18px]">{{ levels[l.level ?? 'depo'].icon }}</span>
+              </div>
+              <div class="min-w-40 flex-1">
+                @if (editingId() === l.id) {
+                  <input class="input h-8" [(ngModel)]="editName" (keydown.enter)="rename(l)" (keydown.escape)="editingId.set(null)" aria-label="Lokasyon adı" />
+                } @else {
+                  <div class="text-sm font-medium text-ink">
+                    {{ l.name }}
+                    <span class="badge ms-1">{{ levels[l.level ?? 'depo'].label }}</span>
+                    @if (!l.is_active) {
+                      <span class="badge ms-1">Pasif</span>
+                    }
+                  </div>
+                }
+                <div class="font-mono text-xs text-muted">
+                  {{ l.code }} · {{ qty(l.total_units ?? l.units) }} ürün
+                  @if (l.has_children && +(l.units ?? 0) > 0) {
+                    <span>({{ qty(l.units) }} doğrudan burada)</span>
                   }
                 </div>
+              </div>
+              @if (canEdit()) {
+                @if (editingId() === l.id) {
+                  <button class="btn btn-primary btn-sm" (click)="rename(l)">Kaydet</button>
+                  <button class="btn btn-ghost btn-sm" (click)="editingId.set(null)">Vazgeç</button>
+                } @else {
+                  @if (l.is_active && childLevels(l).length) {
+                    <button class="btn btn-ghost btn-sm" (click)="startAdd(l)"><span class="icon">add</span> Alt lokasyon</button>
+                  }
+                  <button class="btn-icon" (click)="startEdit(l)" aria-label="Adını değiştir" title="Adını değiştir"><span class="icon">edit</span></button>
+                  <button class="btn btn-ghost btn-sm" (click)="toggle(l)">{{ l.is_active ? 'Pasife al' : 'Aktifleştir' }}</button>
+                }
               }
-              <div class="font-mono text-xs text-muted">{{ l.code }} · {{ qty(l.units) }} ürün</div>
             </div>
-            @if (canEdit()) {
-              @if (editingId() === l.id) {
-                <button class="btn btn-primary btn-sm" (click)="rename(l)">Kaydet</button>
-                <button class="btn btn-ghost btn-sm" (click)="editingId.set(null)">Vazgeç</button>
-              } @else {
-                <button class="btn-icon" (click)="startEdit(l)" aria-label="Adını değiştir" title="Adını değiştir"><span class="icon">edit</span></button>
-                <button class="btn btn-ghost btn-sm" (click)="toggle(l)">{{ l.is_active ? 'Pasife al' : 'Aktifleştir' }}</button>
-              }
+            @if (addingTo() === l.id) {
+              <div class="mt-3 flex flex-wrap gap-2" [style.padding-inline-start.px]="((l.depth ?? 0) + 1) * 28">
+                <select class="select w-32" [(ngModel)]="childLevel" aria-label="Seviye">
+                  @for (lv of childLevels(l); track lv) {
+                    <option [value]="lv">{{ levels[lv].label }}</option>
+                  }
+                </select>
+                <input
+                  class="input max-w-xs"
+                  [(ngModel)]="childName"
+                  [placeholder]="'ör. ' + example(childLevel)"
+                  [attr.aria-label]="l.name + ' altına yeni lokasyon adı'"
+                  (keydown.enter)="add(l)"
+                  (keydown.escape)="addingTo.set(null)"
+                />
+                <button class="btn btn-primary btn-sm" [disabled]="!childName.trim()" (click)="add(l)">Ekle</button>
+                <button class="btn btn-ghost btn-sm" (click)="addingTo.set(null)">Vazgeç</button>
+              </div>
             }
           </li>
         }
       </ul>
       @if (canEdit()) {
         <div class="flex flex-wrap gap-2 border-t border-line p-4">
-          <input class="input max-w-xs" [(ngModel)]="newName" placeholder="ör. Ameliyathane dolabı" aria-label="Yeni lokasyon adı" (keydown.enter)="add()" />
-          <button class="btn btn-secondary" [disabled]="!newName.trim()" (click)="add()"><span class="icon">add</span> Lokasyon ekle</button>
+          <select class="select w-32" [(ngModel)]="newLevel" aria-label="Yeni lokasyon seviyesi">
+            @for (lv of allLevels; track lv) {
+              <option [value]="lv">{{ levels[lv].label }}</option>
+            }
+          </select>
+          <input
+            class="input max-w-xs"
+            [(ngModel)]="newName"
+            [placeholder]="'ör. ' + example(newLevel)"
+            aria-label="Yeni lokasyon adı"
+            (keydown.enter)="add(null)"
+          />
+          <button class="btn btn-secondary" [disabled]="!newName.trim()" (click)="add(null)"><span class="icon">add</span> Lokasyon ekle</button>
         </div>
       }
     </div>
@@ -445,10 +515,16 @@ export class HospitalLocationsTab {
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   protected readonly qty = qty;
+  protected readonly levels = LOCATION_LEVELS;
+  protected readonly allLevels = Object.keys(LOCATION_LEVELS) as LocationLevel[];
   protected readonly canEdit = computed(() => this.auth.can('hospitals.update'));
   protected readonly editingId = signal<number | null>(null);
+  protected readonly addingTo = signal<number | null>(null);
   protected editName = '';
   protected newName = '';
+  protected newLevel: LocationLevel = 'bolum';
+  protected childName = '';
+  protected childLevel: LocationLevel = 'dolap';
 
   private base(): string {
     return `${API_URL}/hospitals/${this.hospitalId()}/locations`;
@@ -459,12 +535,35 @@ export class HospitalLocationsTab {
     this.changed()();
   }
 
-  protected add(): void {
-    const name = this.newName.trim();
+  /** Bir lokasyonun altına eklenebilecek seviyeler (daha derin olanlar) */
+  protected childLevels(l: ConsignmentLocation): LocationLevel[] {
+    const rank = LOCATION_LEVELS[l.level ?? 'depo'].rank;
+    return this.allLevels.filter((lv) => LOCATION_LEVELS[lv].rank > rank);
+  }
+
+  protected example(level: LocationLevel): string {
+    return { bolum: 'Ortopedi', oda: 'Ameliyathane 2', depo: 'Konsinye deposu', dolap: 'Dolap A', raf: 'Raf 3' }[level];
+  }
+
+  protected startAdd(l: ConsignmentLocation): void {
+    this.childName = '';
+    this.childLevel = this.childLevels(l)[0];
+    this.editingId.set(null);
+    this.addingTo.set(l.id);
+  }
+
+  protected add(parent: ConsignmentLocation | null): void {
+    const name = (parent ? this.childName : this.newName).trim();
     if (!name) return;
-    this.http.post(this.base(), { name }).subscribe({
+    const body = { name, level: parent ? this.childLevel : this.newLevel, parent_id: parent?.id ?? null };
+    this.http.post(this.base(), body).subscribe({
       next: () => {
-        this.newName = '';
+        if (parent) {
+          this.addingTo.set(null);
+          this.childName = '';
+        } else {
+          this.newName = '';
+        }
         this.done('Lokasyon eklendi.');
       },
       error: (e) => this.toast.error(errorMessage(e)),
@@ -473,6 +572,7 @@ export class HospitalLocationsTab {
 
   protected startEdit(l: ConsignmentLocation): void {
     this.editName = l.name;
+    this.addingTo.set(null);
     this.editingId.set(l.id);
   }
 

@@ -196,7 +196,7 @@
               <td class="num whitespace-nowrap">
                 <span class="font-semibold text-ink">{{ qty(m.quantity, true) }}</span><span class="ms-1 text-muted">{{ m.product?.unit }}</span>
               </td>
-              <td class="whitespace-nowrap">{{ m.warehouse?.name }}</td>
+              <td class="whitespace-nowrap">{{ m.warehouse?.path || m.warehouse?.name }}</td>
               <td class="text-muted">
                 {{ m.reference || '' }}
                 @if (m.note) {

@@ -25,7 +25,7 @@ class StockController extends Controller
         $today = Carbon::today();
 
         $stocks = Stock::query()
-            ->with(['product:id,name,code,barcode,gtin,tracking,unit,min_stock_level,category', 'warehouse:id,name,code,type,hospital_id', 'warehouse.hospital:id,name'])
+            ->with(['product:id,name,code,barcode,gtin,tracking,unit,min_stock_level,category', 'warehouse:id,name,path,code,type,hospital_id', 'warehouse.hospital:id,name'])
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', $request->warehouse_id))
             ->when($request->filled('product_id'), fn ($q) => $q->where('product_id', $request->product_id))
             ->when($request->filled('q'), fn ($q) => $q->where(fn ($w) => $w

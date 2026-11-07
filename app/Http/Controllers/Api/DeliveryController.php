@@ -33,7 +33,7 @@ class DeliveryController extends Controller
         ]);
 
         $page = self::scoped($request->user())
-            ->with(['hospital:id,name,city', 'location:id,name', 'user:id,name'])
+            ->with(['hospital:id,name,city', 'location:id,name,path', 'user:id,name'])
             ->withCount('lines')
             ->withSum('lines as units', 'quantity')
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->type))
@@ -59,7 +59,7 @@ class DeliveryController extends Controller
         $delivery = self::scoped($request->user())->findOrFail($id);
         $delivery->load([
             'hospital:id,name,code,city,district,address',
-            'location:id,name,code',
+            'location:id,name,path,code',
             'vehicle:id,name,code',
             'contact:id,name,title,phone,email',
             'user:id,name,email,phone',
@@ -100,7 +100,7 @@ class DeliveryController extends Controller
 
         return response()->json([
             'message' => $result['replayed'] ? 'Bu teslimat daha önce kaydedilmişti.' : 'Teslimat kaydedildi.',
-            'delivery' => $result['delivery']->fresh(['hospital:id,name', 'location:id,name']),
+            'delivery' => $result['delivery']->fresh(['hospital:id,name', 'location:id,name,path']),
         ], $result['replayed'] ? 200 : 201);
     }
 

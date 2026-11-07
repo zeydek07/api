@@ -53,16 +53,15 @@ return [
             'warehouses.view', 'stock.view', 'stock.receive', 'stock.transfer', 'stock.adjust',
             'usage.create', 'deliveries.create', 'deliveries.cancel', 'movements.view_team', 'reports.view',
         ]],
+        // Hastaneye ürün bırakır, teslim alır, ameliyat kullanımını kaydeder, iade ve sayım yapar
         'personel' => ['name' => 'Saha Personeli', 'permissions' => [
-            'products.view', 'usage.create',
+            'products.view', 'hospitals.view', 'usage.create', 'deliveries.create',
         ]],
+        // Ürün hazırlar, sevk eder, dönen ürünleri kabul eder, lot/seri ve miktar kontrolü yapar
         'depocu' => ['name' => 'Depo Sorumlusu', 'permissions' => [
             'dashboard.view', 'products.view', 'products.create', 'products.update',
             'warehouses.view', 'stock.view', 'stock.receive', 'stock.transfer', 'stock.adjust',
             'hospitals.view', 'movements.view_all', 'reports.view',
-        ]],
-        'mumessil' => ['name' => 'Mümessil', 'permissions' => [
-            'products.view', 'hospitals.view', 'usage.create', 'deliveries.create',
         ]],
     ],
 ];

@@ -27,7 +27,7 @@ class DemoSeederTest extends ApiTestCase
         $this->assertSame(20, HospitalContact::count());
         $this->assertSame(10, Hospital::count());
         $this->assertSame(3, User::whereHas('role', fn ($q) => $q->where('slug', 'depocu'))->count());
-        $this->assertSame(3, User::whereHas('role', fn ($q) => $q->where('slug', 'mumessil'))->count());
+        $this->assertSame(3, User::whereHas('role', fn ($q) => $q->where('slug', 'personel'))->count());
 
         // Teslimatlar hastaneye bağlı ve mümessiller tarafından yapılmış
         $usages = StockMovement::where('type', 'usage')->get();

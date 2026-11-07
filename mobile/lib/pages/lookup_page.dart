@@ -140,6 +140,7 @@ class _LookupPageState extends State<LookupPage> {
   String _place(StockRow r) {
     final w = r.json['warehouse'] as Map?;
     final hospital = (w?['hospital'] as Map?)?['name'];
-    return hospital == null ? (w?['name'] ?? '') : '$hospital · ${w?['name']}';
+    final name = w?['path'] ?? w?['name'] ?? '';
+    return hospital == null ? name : '$hospital · $name';
   }
 }

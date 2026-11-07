@@ -51,8 +51,12 @@ class Warehouse {
 
   int get id => json['id'];
   String get name => json['name'] ?? '';
+
+  /// Hastane lokasyonlarında tam yol: "Ortopedi › Ameliyathane 2 › Dolap A"
+  String get path => (json['path'] as String?) ?? name;
   String? get code => json['code'];
   String? get type => json['type'];
+  double get totalUnits => toNum(json['total_units'] ?? json['units']);
   bool get isActive => json['is_active'] != false;
 
   String get label => code == null ? name : '$name ($code)';
@@ -70,7 +74,7 @@ class StockRow {
   String? get lot => json['lot_number'];
   String? get serial => json['serial_number'];
   String? get expiry => (json['expiry_date'] as String?)?.substring(0, 10);
-  String? get warehouseName => (json['warehouse'] as Map?)?['name'];
+  String? get warehouseName => (json['warehouse'] as Map?)?['path'] ?? (json['warehouse'] as Map?)?['name'];
 
   bool get expired => expiry != null && expiry!.compareTo(_today()) < 0;
 

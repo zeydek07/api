@@ -59,7 +59,7 @@
           {{ doc.hospital?.address || [doc.hospital?.district, doc.hospital?.city].join(', ') }}
         </div>
         <div class="mt-1 text-sm">
-          <span class="text-muted">Lokasyon:</span> {{ doc.location?.name }}
+          <span class="text-muted">Lokasyon:</span> {{ doc.location?.path || doc.location?.name }}
         </div>
       </div>
       <div>

@@ -15,6 +15,8 @@ export interface RoleRef {
 export interface WarehouseRef {
   id: number;
   name: string;
+  /** Hastane lokasyonlarında tam yol: "Ortopedi › Ameliyathane 2 › Dolap A" */
+  path?: string | null;
   code: string;
   type: WarehouseType;
   hospital_id?: number | null;
@@ -25,9 +27,17 @@ export interface WarehouseRef {
 export type WarehouseType = 'central' | 'branch' | 'field' | 'consignment';
 
 /** "Kartal Devlet Hastanesi · Ana konsinye deposu" ya da "Merkez Depo" */
-export function placeName(w: WarehouseRef | { name: string; hospital?: { name: string } | null } | null | undefined): string {
+export function placeName(
+  w: WarehouseRef | { name: string; path?: string | null; hospital?: { name: string } | null } | null | undefined,
+): string {
   if (!w) return '';
-  return w.hospital ? `${w.hospital.name} · ${w.name}` : w.name;
+  const name = w.path || w.name;
+  return w.hospital ? `${w.hospital.name} · ${name}` : name;
+}
+
+/** Lokasyonun tam yolu (hastane lokasyonları) ya da adı */
+export function locName(l: { name: string; path?: string | null } | null | undefined): string {
+  return l ? l.path || l.name : '';
 }
 
 export interface Profile {
@@ -139,13 +149,49 @@ export interface Hospital {
 }
 
 /** Hastanede konsinye ürünlerin durduğu yer */
+export type LocationLevel = 'bolum' | 'oda' | 'depo' | 'dolap' | 'raf';
+
+/** Seviye sırası: alt lokasyonun sırası üstündekinden büyük olmalı */
+export const LOCATION_LEVELS: Record<LocationLevel, { label: string; rank: number; icon: string }> = {
+  bolum: { label: 'Bölüm', rank: 1, icon: 'apartment' },
+  oda: { label: 'Oda', rank: 2, icon: 'meeting_room' },
+  depo: { label: 'Depo', rank: 2, icon: 'warehouse' },
+  dolap: { label: 'Dolap', rank: 3, icon: 'kitchen' },
+  raf: { label: 'Raf', rank: 4, icon: 'shelves' },
+};
+
 export interface ConsignmentLocation {
   id: number;
   name: string;
+  /** "Ortopedi › Ameliyathane 2 › Dolap A" */
+  path?: string | null;
   code: string;
   hospital_id: number;
+  parent_id?: number | null;
+  level?: LocationLevel | null;
+  depth?: number;
   is_active: boolean;
+  /** Lokasyonun kendi stoku */
   units?: string | number | null;
+  /** Alt lokasyonlarla birlikte */
+  total_units?: number;
+  has_children?: boolean;
+}
+
+/** Lokasyonun kendisi ve tüm alt lokasyonlarının id'leri */
+export function subtreeIds(rootId: number, all: ConsignmentLocation[]): Set<number> {
+  const ids = new Set([rootId]);
+  let added = true;
+  while (added) {
+    added = false;
+    for (const l of all) {
+      if (l.parent_id && ids.has(l.parent_id) && !ids.has(l.id)) {
+        ids.add(l.id);
+        added = true;
+      }
+    }
+  }
+  return ids;
 }
 
 /** Hastane personeli: teslim alan / muhatap (firma personeli değil) */
@@ -153,7 +199,7 @@ export interface HospitalContact {
   id: number;
   hospital_id: number;
   location_id: number | null;
-  location?: { id: number; name: string } | null;
+  location?: { id: number; name: string; path?: string | null } | null;
   name: string;
   title: string | null;
   phone: string | null;
@@ -190,7 +236,7 @@ export interface Delivery {
   lines_count?: number;
   units?: string | number | null;
   hospital?: { id: number; name: string; code?: string | null; city?: string | null; district?: string | null; address?: string | null };
-  location?: { id: number; name: string; code?: string };
+  location?: { id: number; name: string; path?: string | null; code?: string };
   vehicle?: { id: number; name: string; code?: string };
   contact?: { id: number; name: string; title: string | null; phone: string | null; email: string | null } | null;
   user?: { id: number; name: string; email?: string; phone?: string | null };
@@ -241,7 +287,7 @@ export interface Movement {
   longitude: string | null;
   created_at: string;
   product?: { id: number; name: string; code: string; unit: string };
-  warehouse?: { id: number; name: string; code?: string; hospital?: { id: number; name: string } | null };
+  warehouse?: { id: number; name: string; path?: string | null; code?: string; hospital?: { id: number; name: string } | null };
   delivery?: { id: number; number: string; type: DeliveryType } | null;
   user?: { id: number; name: string };
   hospital?: { id: number; name: string; city?: string | null } | null;

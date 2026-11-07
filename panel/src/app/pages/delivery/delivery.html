@@ -7,7 +7,7 @@
     <h1 class="mt-4 text-xl font-semibold">{{ d.type === 'return' ? 'Geri alma kaydedildi' : 'Teslimat kaydedildi' }}</h1>
     <p class="mt-1 font-mono text-lg text-primary-ink">{{ d.number }}</p>
     <p class="mt-3 text-sm text-muted">
-      {{ d.hospital?.name }} · {{ d.location?.name }} ·
+      {{ d.hospital?.name }} · {{ d.location?.path || d.location?.name }} ·
       {{ lines().length }} kalem / {{ qty(totalUnits()) }} adet.
       {{ d.type === 'return' ? 'Ürünler aracınıza geçti.' : 'Ürünler hastanenin konsinye stoğuna geçti.' }}
     </p>
@@ -136,9 +136,9 @@
                       [attr.aria-pressed]="location()?.id === l.id"
                       (click)="selectLocation(l)"
                     >
-                      <span class="icon text-[16px]">shelves</span>{{ l.name }}
-                      @if (+(l.units ?? 0) > 0) {
-                        <span class="opacity-70">· {{ qty(l.units) }}</span>
+                      <span class="icon text-[16px]">{{ levelIcon(l) }}</span>{{ l.path || l.name }}
+                      @if (+(l.total_units ?? l.units ?? 0) > 0) {
+                        <span class="opacity-70">· {{ qty(l.total_units ?? l.units) }}</span>
                       }
                     </button>
                   }

@@ -13,6 +13,7 @@ import {
   DeliveryType,
   Hospital,
   HospitalContact,
+  LOCATION_LEVELS,
   Page,
   Stock,
   WarehouseRef,
@@ -206,6 +207,10 @@ export class DeliveryPage implements OnInit {
       this.contacts.set(c);
       if (select) this.contact.set(c.find((x) => x.id === select) ?? null);
     });
+  }
+
+  protected levelIcon(l: ConsignmentLocation): string {
+    return LOCATION_LEVELS[l.level ?? 'depo']?.icon ?? 'shelves';
   }
 
   protected selectLocation(l: ConsignmentLocation): void {

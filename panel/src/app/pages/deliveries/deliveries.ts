@@ -92,7 +92,7 @@ import { Pagination } from '../../ui/pagination';
                 </td>
                 <td>
                   <div class="cell-title">{{ d.hospital?.name }}</div>
-                  <div class="cell-sub">{{ d.location?.name }}</div>
+                  <div class="cell-sub">{{ d.location?.path || d.location?.name }}</div>
                 </td>
                 <td>{{ d.receiver_name }}</td>
                 <td class="whitespace-nowrap">{{ d.user?.name }}</td>

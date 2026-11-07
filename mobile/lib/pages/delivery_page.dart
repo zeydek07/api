@@ -300,7 +300,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
             icon: Icons.place_outlined,
             value: _location,
             items: _locations,
-            itemLabel: (w) => w.name,
+            itemLabel: (w) => w.path,
+            itemSubtitle: (w) => w.totalUnits > 0 ? '${qty(w.totalUnits)} ürün' : null,
             enabled: _hospital != null,
             onChanged: _selectLocation,
           ),
@@ -450,7 +451,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
               Text('${d['number']} kaydedildi', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(
-                '${(d['hospital'] as Map?)?['name'] ?? ''} · ${(d['location'] as Map?)?['name'] ?? ''}',
+                '${(d['hospital'] as Map?)?['name'] ?? ''} · ${(d['location'] as Map?)?['path'] ?? (d['location'] as Map?)?['name'] ?? ''}',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),

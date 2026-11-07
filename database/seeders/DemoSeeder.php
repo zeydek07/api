@@ -133,7 +133,7 @@ class DemoSeeder extends Seeder
         });
 
         // Mümessiller ve çantaları
-        $repRole = Role::where('slug', 'mumessil')->value('id');
+        $repRole = Role::where('slug', 'personel')->value('id');
         $reps = collect(self::REPRESENTATIVES)->map(function ($u, $i) use ($repRole, $manager) {
             $user = User::create([
                 'name' => $u[0], 'email' => $u[1], 'phone' => $u[2], 'password' => self::PASSWORD,

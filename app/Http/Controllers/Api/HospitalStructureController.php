@@ -20,20 +20,52 @@ class HospitalStructureController extends Controller
 {
     // ------------------------------------------------------------ lokasyonlar
 
+    /**
+     * Lokasyon ağacı, tam yola göre sıralı. units: lokasyonun kendi stoku,
+     * total_units: alt lokasyonlarla birlikte.
+     */
     public function locations(Hospital $hospital): JsonResponse
     {
-        return response()->json(
-            $hospital->locations()
-                ->withSum(['stocks as units' => fn ($q) => $q->where('quantity', '>', 0)], 'quantity')
-                ->orderByDesc('is_active')->orderBy('id')
-                ->get(['id', 'name', 'code', 'type', 'hospital_id', 'is_active'])
-        );
+        $all = $hospital->locations()
+            ->withSum(['stocks as units' => fn ($q) => $q->where('quantity', '>', 0)], 'quantity')
+            ->get(['id', 'name', 'path', 'code', 'type', 'level', 'parent_id', 'hospital_id', 'is_active']);
+
+        $rows = $all->map(function (Warehouse $l) use ($all) {
+            $ids = Warehouse::subtreeIds($l->id, $all);
+            $l->setAttribute('depth', substr_count((string) $l->path, Warehouse::PATH_SEPARATOR));
+            $l->setAttribute('total_units', (float) $all->whereIn('id', $ids)->sum('units'));
+            $l->setAttribute('has_children', count($ids) > 1);
+
+            return $l;
+        })->sortBy(fn ($l) => mb_strtolower((string) $l->path), SORT_NATURAL)->values();
+
+        return response()->json($rows);
     }
 
     public function storeLocation(Request $request, Hospital $hospital): JsonResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:120']]);
-        $this->ensureUniqueLocationName($hospital, $data['name']);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'level' => ['required', Rule::in(array_keys(Warehouse::LEVELS))],
+            'parent_id' => ['nullable', 'integer'],
+        ], [], ['level' => 'seviye', 'parent_id' => 'üst lokasyon']);
+
+        $parent = null;
+        if ($data['parent_id'] ?? null) {
+            $parent = $hospital->locations()->find($data['parent_id']);
+            if (! $parent) {
+                return $this->fail('parent_id', 'Üst lokasyon bu hastaneye ait değil.');
+            }
+            if (! $parent->is_active) {
+                return $this->fail('parent_id', 'Pasif lokasyonun altına yeni lokasyon eklenemez.');
+            }
+            $parentLevel = $parent->level ?? 'depo';
+            if (Warehouse::LEVELS[$data['level']] <= Warehouse::LEVELS[$parentLevel]) {
+                return $this->fail('level', Warehouse::LEVEL_LABELS[$parentLevel].' altına '
+                    .mb_strtolower(Warehouse::LEVEL_LABELS[$data['level']]).' eklenemez. Sıra: bölüm › oda / depo › dolap › raf.');
+            }
+        }
+        $this->ensureUniqueLocationName($hospital, $data['name'], $parent?->id);
 
         $n = $hospital->locations()->count() + 1;
         while (Warehouse::where('code', "KNS-{$hospital->id}-{$n}")->exists()) {
@@ -42,6 +74,7 @@ class HospitalStructureController extends Controller
 
         $location = $hospital->locations()->create([
             'name' => $data['name'], 'code' => "KNS-{$hospital->id}-{$n}", 'type' => Warehouse::TYPE_CONSIGNMENT,
+            'level' => $data['level'], 'parent_id' => $parent?->id,
         ]);
 
         return response()->json($location, 201);
@@ -55,13 +88,19 @@ class HospitalStructureController extends Controller
             'is_active' => ['sometimes', 'boolean'],
         ]);
         if (isset($data['name'])) {
-            $this->ensureUniqueLocationName($hospital, $data['name'], $location->id);
+            $this->ensureUniqueLocationName($hospital, $data['name'], $location->parent_id, $location->id);
         }
         if (($data['is_active'] ?? true) === false) {
             $this->ensureNotLastActive($hospital, $location);
+            if ($location->children()->where('is_active', true)->exists()) {
+                return $this->fail('is_active', 'Altında aktif lokasyon bulunan lokasyon pasife alınamaz. Önce alt lokasyonları pasife alın.');
+            }
             if ($location->stocks()->where('quantity', '>', 0)->exists()) {
                 return $this->fail('is_active', 'İçinde ürün bulunan lokasyon pasife alınamaz. Önce ürünleri geri alın ya da başka lokasyona taşıyın.');
             }
+        }
+        if (($data['is_active'] ?? false) === true && $location->parent && ! $location->parent->is_active) {
+            return $this->fail('is_active', 'Üst lokasyonu pasif olan lokasyon aktifleştirilemez.');
         }
 
         $location->update($data);
@@ -74,6 +113,9 @@ class HospitalStructureController extends Controller
         $this->ensureBelongs($hospital, $location);
         $this->ensureNotLastActive($hospital, $location);
 
+        if ($location->children()->exists()) {
+            return $this->fail('location', 'Alt lokasyonu olan lokasyon silinemez.');
+        }
         if (StockMovement::where('warehouse_id', $location->id)->exists()) {
             return $this->fail('location', 'Hareket görmüş lokasyon silinemez; pasife alabilirsiniz.');
         }
@@ -89,7 +131,7 @@ class HospitalStructureController extends Controller
     {
         return response()->json(
             $hospital->contacts()
-                ->with('location:id,name')
+                ->with('location:id,name,path')
                 ->when(! $request->boolean('include_inactive'), fn ($q) => $q->where('is_active', true))
                 ->orderBy('name')
                 ->get()
@@ -102,7 +144,7 @@ class HospitalStructureController extends Controller
         $data = $this->validatedContact($request, $hospital);
         $contact = $hospital->contacts()->create([...$data, 'created_by' => $request->user()->id]);
 
-        return response()->json($contact->load('location:id,name'), 201);
+        return response()->json($contact->load('location:id,name,path'), 201);
     }
 
     public function updateContact(Request $request, Hospital $hospital, HospitalContact $contact): JsonResponse
@@ -110,7 +152,7 @@ class HospitalStructureController extends Controller
         abort_unless($contact->hospital_id === $hospital->id, 404);
         $contact->update($this->validatedContact($request, $hospital, $contact));
 
-        return response()->json($contact->load('location:id,name'));
+        return response()->json($contact->load('location:id,name,path'));
     }
 
     public function destroyContact(Hospital $hospital, HospitalContact $contact): JsonResponse
@@ -127,13 +169,14 @@ class HospitalStructureController extends Controller
     public function consignment(Request $request, Hospital $hospital): JsonResponse
     {
         $request->validate(['location_id' => ['nullable', 'integer']]);
-        $ids = $hospital->locations()->pluck('id');
+        $all = $hospital->locations()->get(['id', 'parent_id']);
+        // Bir lokasyon seçilirse alt lokasyonlarındaki (dolap, raf) ürünler de gelir
+        $ids = $request->filled('location_id') ? Warehouse::subtreeIds((int) $request->location_id, $all) : $all->pluck('id')->all();
 
         $rows = Stock::query()
             ->whereIn('warehouse_id', $ids)
             ->where('quantity', '>', 0)
-            ->when($request->filled('location_id'), fn ($q) => $q->where('warehouse_id', $request->location_id))
-            ->with(['product:id,name,code,gtin,tracking,unit', 'warehouse:id,name'])
+            ->with(['product:id,name,code,gtin,tracking,unit', 'warehouse:id,name,path'])
             ->orderByRaw('CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END')
             ->orderBy('expiry_date')
             ->get();
@@ -181,11 +224,15 @@ class HospitalStructureController extends Controller
         }
     }
 
-    private function ensureUniqueLocationName(Hospital $hospital, string $name, ?int $ignoreId = null): void
+    /** Aynı üst lokasyonun altında aynı ad iki kez olamaz */
+    private function ensureUniqueLocationName(Hospital $hospital, string $name, ?int $parentId, ?int $ignoreId = null): void
     {
-        $exists = $hospital->locations()->where('name', $name)->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))->exists();
+        $exists = $hospital->locations()->where('name', $name)
+            ->when($parentId, fn ($q) => $q->where('parent_id', $parentId), fn ($q) => $q->whereNull('parent_id'))
+            ->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))
+            ->exists();
         if ($exists) {
-            abort($this->fail('name', "Bu hastanede \"{$name}\" adlı bir lokasyon zaten var."));
+            abort($this->fail('name', "Bu seviyede \"{$name}\" adlı bir lokasyon zaten var."));
         }
     }
 

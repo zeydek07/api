@@ -24,7 +24,7 @@ php artisan serve          # http://localhost:8000/api/...
 
 Testler (SQLite bellek veritabanında çalışır, MySQL gerekmez): `php artisan test`
 
-**Örnek veri** (30 ürün, 10 hastane, 3 depocu, 3 mümessil ve son 3 haftanın hareketleri). Yalnızca deneme ortamında:
+**Örnek veri** (30 ürün, 10 hastane, 3 depocu, 3 saha personeli (mumessil1-3@medikal.test) ve son 3 haftanın hareketleri). Yalnızca deneme ortamında:
 
 ```bash
 php artisan db:seed --class=DemoSeeder     # örnek kullanıcı şifresi: Demo1234!
@@ -51,10 +51,9 @@ Personelin yetkisi = **rolünün yetkileri + kendisine özel verilen yetkiler**.
 | Rol | Varsayılan |
 |---|---|
 | `super-admin` | Her şey |
-| `yonetici` | Personel, ürün, stok, transfer, sayım, ekibinin hareketleri, raporlar |
-| `personel` | Ürünleri görme, sahada ürün düşme |
-| `depocu` | Ürün, stok girişi, transfer, sayım, tüm hareketler, raporlar |
-| `mumessil` | Ürünleri ve hastaneleri görme, hastaneye teslim (stoktan düşme) |
+| `yonetici` | **Yönetim:** hangi hastanede, depoda, dolapta ne kadar ürün var; ne kullanıldı, ne eksik, ne faturalanmalı. Personel, ürün, stok, teslimat iptali, raporlar |
+| `personel` | **Saha Personeli** (eski "mümessil" rolü buna katıldı): hastaneye ürün bırakır, geri alır, ameliyat kullanımını kaydeder, iade ve sayım yapar |
+| `depocu` | **Depo Sorumlusu:** ürün hazırlar, sevk eder, dönen ürünleri kabul eder, lot/seri ve miktar kontrolü yapar |
 
 Roller panelden (`/api/roles`) değiştirilebilir, yeni rol eklenebilir.
 
@@ -155,9 +154,10 @@ Lot verilmeyen çıkışlarda SKT'si en yakın lot önce kullanılır; SKT'si ge
 
 | Yöntem | Adres | Açıklama |
 |---|---|---|
-| GET | `/api/hospitals/{id}/locations` | Hastanenin konsinye lokasyonları (yeni hastanede otomatik "Ana konsinye deposu") |
+| GET | `/api/hospitals/{id}/locations` | Hastanenin lokasyon ağacı (bölüm › oda / depo › dolap › raf): `path` tam yol, `units` kendi stoku, `total_units` alt lokasyonlarla birlikte. Yeni hastanede otomatik "Ana konsinye deposu" |
+| POST | `/api/hospitals/{id}/locations` | `{name, level: bolum\|oda\|depo\|dolap\|raf, parent_id?}`. Alt lokasyon üstünden daha derin seviyede olmalı (bölüm › oda/depo › dolap › raf) |
 | GET/POST | `/api/hospitals/{id}/contacts` | Hastane personeli (teslim alan); teslimat sırasında da eklenebilir |
-| GET | `/api/hospitals/{id}/consignment?location_id=` | Hastanedeki konsinye ürünler (lot/seri/SKT) ve özet |
+| GET | `/api/hospitals/{id}/consignment?location_id=` | Hastanedeki konsinye ürünler (lot/seri/SKT) ve özet; bir lokasyon seçilirse alt lokasyonları da dahil |
 | GET | `/api/mobile/warehouses/{id}/stock` | Aracımdaki stok satırları (teslimatta `stock_id` buradan) |
 | POST | `/api/deliveries` | Teslim (`type: delivery`, araç → hastane) ya da geri alma (`type: return`, hastane → araç) |
 | GET | `/api/deliveries?hospital_id=&type=&from=&to=` | Belgeler (kendi / ekip / herkes, yetkiye göre) |
@@ -194,7 +194,7 @@ Hastaneye düz transfer ya da stok girişi yapılamaz; konsinye yalnızca imzal�
 
 **API testleri:** `php artisan test`
 
-**Tarayıcı testleri (Playwright):** paneli gerçek Chrome'da yönetici, depocu ve mümessil olarak gezer: giriş, yetkiler, karekodla stok girişi, hastaneye teslim + imza, geri alma, iptal, hastane ekleme ve telefon görünümü.
+**Tarayıcı testleri (Playwright):** paneli gerçek Chrome'da yönetici, depocu ve saha personeli olarak gezer: giriş, yetkiler, karekodla stok girişi, hastaneye teslim + imza, geri alma, iptal, hastane ekleme, lokasyon ağacı ve telefon görünümü.
 
 ```sh
 cd panel
