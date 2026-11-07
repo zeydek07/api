@@ -205,6 +205,10 @@ npm run e2e:report   # son çalıştırmanın raporu (hata ekran görüntüsü, 
 
 Testler gerçek veriye dokunmaz: ayrı veritabanı (`medikal_stok_e2e`), ayrı portlar (API 8020, panel 4300) ve ayrı dosya klasörü (`storage/app/e2e`) kullanır. İlk çalıştırmada `.env.e2e.example` dosyası `.env.e2e` olarak kopyalanır. Veritabanı adı `_e2e` ile bitmiyorsa testler başlamaz.
 
+## Mobil uygulama
+
+`mobile/` klasöründe Flutter ile yazılmış Android uygulaması var: yetkiye göre stok girişi, stok çıkışı, hastane teslimatı / geri alma ve kamerayla barkod okuma. Ayrıntılar: [mobile/README.md](mobile/README.md).
+
 ## Canlıya alırken
 
 - `.env`: `APP_ENV=production`, `APP_DEBUG=false`, güçlü `ADMIN_PASSWORD`
