@@ -111,8 +111,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
   void _selectLocation(Warehouse l) {
     setState(() {
       _location = l;
-      final cl = _contact?['location_id'];
-      if (cl != null && cl != l.id) _contact = null;
+      if (_contact != null && !_visibleContacts.any((c) => c['id'] == _contact!['id'])) _contact = null;
     });
     if (_isReturn) _loadRows();
   }
@@ -146,9 +145,16 @@ class _DeliveryPageState extends State<DeliveryPage> {
     }
   }
 
-  List<Map<String, dynamic>> get _visibleContacts => _contacts
-      .where((c) => c['is_active'] != false && (c['location_id'] == null || c['location_id'] == _location?.id))
-      .toList();
+  /// Lokasyonsuz kişiler ve seçili lokasyona ya da üst lokasyonlarına bağlı olanlar
+  List<Map<String, dynamic>> get _visibleContacts {
+    final chain = <int>{};
+    for (Warehouse? l = _location; l != null; l = _locations.where((x) => x.id == l!.json['parent_id']).firstOrNull) {
+      chain.add(l.id);
+    }
+    return _contacts
+        .where((c) => c['is_active'] != false && (c['location_id'] == null || chain.contains(c['location_id'])))
+        .toList();
+  }
 
   Future<void> _scan() async {
     final raw = await scanBarcode(context);
@@ -253,8 +259,25 @@ class _DeliveryPageState extends State<DeliveryPage> {
     }
   }
 
+  /// Kayıttan sonra lokasyonlardaki ürün sayıları değişir; listeyi tazele
+  Future<void> _refreshLocations() async {
+    if (_hospital == null) return;
+    try {
+      final locs = await _api.get('hospitals/${_hospital!['id']}/locations');
+      final active = (locs as List).map((e) => Warehouse(Map<String, dynamic>.from(e))).where((w) => w.isActive).toList();
+      if (!mounted) return;
+      setState(() {
+        _locations = active;
+        _location = active.where((w) => w.id == _location?.id).firstOrNull;
+      });
+    } catch (_) {
+      // sayılar bir sonraki açılışta güncellenir
+    }
+  }
+
   /// Aynı hastane ve araçla yeni belge
   void _startNew() {
+    _refreshLocations();
     setState(() {
       _done = null;
       _idempotencyKey = const Uuid().v4();

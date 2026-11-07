@@ -93,9 +93,12 @@ export class DeliveryPage implements OnInit {
   });
 
   /** Seçili lokasyona bağlı kişiler ve lokasyonu boş olanlar */
+  /** Lokasyonsuz kişiler ve seçili lokasyona ya da onun üst lokasyonlarına (dolabın bölümü vb.) bağlı olanlar */
   protected readonly visibleContacts = computed(() => {
-    const loc = this.location()?.id;
-    return this.contacts().filter((c) => c.is_active && (!c.location_id || c.location_id === loc));
+    const chain = new Set<number>();
+    const all = this.locations();
+    for (let l = this.location(); l; l = all.find((x) => x.id === l!.parent_id) ?? null) chain.add(l.id);
+    return this.contacts().filter((c) => c.is_active && (!c.location_id || chain.has(c.location_id)));
   });
 
   protected readonly filteredRows = computed(() => {
@@ -202,6 +205,17 @@ export class DeliveryPage implements OnInit {
     this.loadContacts(h.id);
   }
 
+  /** Kayıttan sonra lokasyonlardaki ürün sayıları değişir; seçimi koruyarak listeyi tazele */
+  private refreshLocations(): void {
+    const h = this.hospital();
+    if (!h) return;
+    this.http.get<ConsignmentLocation[]>(`${API_URL}/hospitals/${h.id}/locations`).subscribe((list) => {
+      const active = list.filter((l) => l.is_active);
+      this.locations.set(active);
+      this.location.set(active.find((l) => l.id === this.location()?.id) ?? null);
+    });
+  }
+
   private loadContacts(hospitalId: number, select?: number): void {
     this.http.get<HospitalContact[]>(`${API_URL}/hospitals/${hospitalId}/contacts`).subscribe((c) => {
       this.contacts.set(c);
@@ -215,7 +229,8 @@ export class DeliveryPage implements OnInit {
 
   protected selectLocation(l: ConsignmentLocation): void {
     this.location.set(l);
-    if (this.contact()?.location_id && this.contact()!.location_id !== l.id) this.contact.set(null);
+    const keep = this.contact();
+    if (keep && !this.visibleContacts().some((c) => c.id === keep.id)) this.contact.set(null);
     if (this.isReturn()) this.loadRows();
   }
 
@@ -413,6 +428,7 @@ export class DeliveryPage implements OnInit {
   /** Aynı hastane ve araçla yeni belge */
   protected startNew(): void {
     this.done.set(null);
+    this.refreshLocations();
     this.idempotencyKey = newKey();
     this.cart.set(new Map());
     this.signature.set(null);
