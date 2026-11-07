@@ -4,8 +4,11 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 /// Kamerayla barkod / GS1 DataMatrix / QR okur ve okunan ham metni döndürür.
 /// Kamera yoksa (emülatör vb.) metni elle yazma seçeneği de var.
-Future<String?> scanBarcode(BuildContext context) =>
-    Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const ScannerPage()));
+Future<String?> scanBarcode(BuildContext context) {
+  // Dönüşte klavye kendiliğinden açılmasın
+  FocusManager.instance.primaryFocus?.unfocus();
+  return Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const ScannerPage()));
+}
 
 class ScannerPage extends StatefulWidget {
   const ScannerPage({super.key});

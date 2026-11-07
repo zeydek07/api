@@ -116,6 +116,7 @@ class _ReceivePageState extends State<ReceivePage> {
 
   /// Barkodu olmayan ürün için adıyla arama
   Future<void> _search() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final product = await showModalBottomSheet<Product>(
       context: context,
       isScrollControlled: true,
@@ -129,6 +130,7 @@ class _ReceivePageState extends State<ReceivePage> {
   }
 
   Future<void> _edit(_Line line) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final lot = TextEditingController(text: line.lot);
     final serial = TextEditingController(text: line.serial);
     final quantity = TextEditingController(text: qty(line.quantity));
