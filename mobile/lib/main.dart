@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/session.dart';
 import 'pages/home_page.dart';
 import 'pages/login_page.dart';
+import 'pages/shell_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +21,14 @@ class MedikalApp extends StatelessWidget {
     return MaterialApp(
       title: 'Medikal Stok',
       debugShowCheckedModeBanner: false,
+      // Tarih / saat seçicileri ve sistem metinleri Türkçe
+      locale: const Locale('tr'),
+      supportedLocales: const [Locale('tr')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: ThemeData(
         colorScheme: scheme,
         inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder()),
@@ -30,7 +40,9 @@ class MedikalApp extends StatelessWidget {
         builder: (context, _) {
           final s = Session.instance;
           if (!s.ready) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-          return s.user == null ? const LoginPage() : const HomePage();
+          if (s.user == null) return const LoginPage();
+          // Saha personeli: alt menülü saha uygulaması; depocu: işlem kartları
+          return s.can('cases.create') ? const ShellPage() : const HomePage();
         },
       ),
     );

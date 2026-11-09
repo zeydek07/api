@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard, guestGuard, permissionGuard } from './core/guards';
-import { DELIVERY_VIEWERS } from './layout/menu';
+import { CASE_VIEWERS, DELIVERY_VIEWERS } from './layout/menu';
 import { Shell } from './layout/shell';
 
 export const routes: Routes = [
@@ -40,6 +40,24 @@ export const routes: Routes = [
         title: 'Teslimat belgesi',
         data: { permission: DELIVERY_VIEWERS },
         loadComponent: () => import('./pages/deliveries/delivery-document').then((m) => m.DeliveryDocumentPage),
+      },
+      {
+        path: 'vakalar',
+        title: 'Vakalar',
+        data: { permission: CASE_VIEWERS },
+        loadComponent: () => import('./pages/cases/cases').then((m) => m.CasesPage),
+      },
+      {
+        path: 'vakalar/:id',
+        title: 'Vaka',
+        data: { permission: CASE_VIEWERS },
+        loadComponent: () => import('./pages/cases/case-detail').then((m) => m.CaseDetailPage),
+      },
+      {
+        path: 'faturalama',
+        title: 'Faturalama',
+        data: { permission: 'billing.manage' },
+        loadComponent: () => import('./pages/billing/billing').then((m) => m.BillingPage),
       },
       {
         path: 'hastaneler',

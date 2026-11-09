@@ -6,7 +6,7 @@ const CASES = [
   {
     role: 'admin' as const,
     menu: [
-      'Kontrol Paneli', 'Hastaneye Teslim', 'Teslimatlar', 'Hastaneler', 'Ürünler', 'Stok Durumu',
+      'Kontrol Paneli', 'Hastaneye Teslim', 'Teslimatlar', 'Vakalar', 'Faturalama', 'Hastaneler', 'Ürünler', 'Stok Durumu',
       'Stok Hareketleri', 'Depolar', 'Raporlar', 'Personeller', 'Roller ve Yetkiler',
     ],
     forbidden: [] as string[],
@@ -18,7 +18,7 @@ const CASES = [
   },
   {
     role: 'mumessil' as const,
-    menu: ['Hastaneye Teslim', 'Teslimatlar', 'Hastaneler', 'Ürünler'],
+    menu: ['Hastaneye Teslim', 'Teslimatlar', 'Vakalar', 'Hastaneler', 'Ürünler'],
     forbidden: ['/personeller', '/roller', '/stok', '/raporlar', '/depolar'],
   },
 ];

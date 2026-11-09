@@ -1,6 +1,9 @@
 /** Teslimat belgelerini görebilenler (kendi belgeleri / ekip / herkes) */
 export const DELIVERY_VIEWERS = ['deliveries.create', 'deliveries.cancel', 'movements.view_team', 'movements.view_all'];
 
+/** Vakaları görebilenler */
+export const CASE_VIEWERS = ['cases.create', 'cases.approve', 'cases.view_all', 'billing.manage'];
+
 export interface MenuItem {
   label: string;
   icon: string;
@@ -24,6 +27,8 @@ export const MENU_GROUPS: MenuGroup[] = [
     items: [
       { label: 'Hastaneye Teslim', icon: 'local_hospital', path: '/teslimat', permission: 'deliveries.create' },
       { label: 'Teslimatlar', icon: 'receipt_long', path: '/teslimatlar', permission: DELIVERY_VIEWERS },
+      { label: 'Vakalar', icon: 'medical_services', path: '/vakalar', permission: CASE_VIEWERS },
+      { label: 'Faturalama', icon: 'request_quote', path: '/faturalama', permission: 'billing.manage' },
       { label: 'Hastaneler', icon: 'domain', path: '/hastaneler', permission: 'hospitals.view' },
     ],
   },

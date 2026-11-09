@@ -44,6 +44,8 @@ class Api {
   Future<dynamic> post(String path, Object? body, {Map<String, String>? headers}) =>
       _send('POST', path, body: body, headers: headers);
 
+  Future<dynamic> put(String path, Object? body) => _send('PUT', path, body: body);
+
   Future<dynamic> _send(
     String method,
     String path, {

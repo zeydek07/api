@@ -57,6 +57,11 @@ class Hospital extends Model
     }
 
     /** Konsinye teslimat ve geri alma belgeleri */
+    public function doctors(): HasMany
+    {
+        return $this->hasMany(Doctor::class)->orderBy('name');
+    }
+
     public function deliveries(): HasMany
     {
         return $this->hasMany(Delivery::class);

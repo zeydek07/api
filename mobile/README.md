@@ -2,8 +2,15 @@
 
 Panelle aynı API'yi kullanır. Personel kendi hesabıyla girer ve yalnızca yetkisi olan işlemleri görür. API de her işlemde yetkiyi ayrıca kontrol eder.
 
+Vaka yetkisi (`cases.create`) olan kullanıcı alt menülü saha uygulamasını görür: **Ana sayfa · Vakalar · Aracım · Tümü**.
+Yetkisi olmayan (ör. depocu) işlem kartlarını görür.
+
 | Ekran | Yetki | Ne yapar |
 |---|---|---|
+| Ana sayfa | `cases.create` | Bugünkü vakalar ("Vakayı başlat"), bekleyen işler (kaydı geciken vaka, gönderilemeyen e-posta), SKT uyarıları, hızlı işlemler |
+| Vakalar | `cases.create` | Bugün / yaklaşan / geçmiş vakalar; vaka planlama (hastane, bölüm, doktor, tarih-saat, ameliyat türü), hazırlık listesi |
+| Vaka kaydı | `cases.create` | Ameliyathanede ürünleri okut (hastane dolabı ya da araç), her satırı Kullanıldı / Açıldı / Kullanılmadı işaretle, tutanağı imzalat; PDF tutanak e-postayla gider |
+| Aracım | `cases.create` | Araçtaki ürünler, SKT yakın / geçmiş süzgeci |
 | Stok Girişi | `stock.receive` | Depoya mal kabul. Karekod okutulunca ürün, lot, seri ve SKT kendiliğinden dolar. |
 | Stok Çıkışı | `stock.transfer` | Depodan araca veya başka depoya transfer. SKT'si geçmiş lot çıkarılamaz. |
 | Hastane Teslimatı | `deliveries.create` | Araçtan hastaneye teslim (imza zorunlu) ve hastaneden geri alma. Konum kaydet anında alınır; alınamazsa belge "konum alınamadı" olarak işaretlenir. Fotoğraf (kamera ya da galeri) eklenebilir; belgenin PDF kopyası teslim alanın e-postasına gider. |

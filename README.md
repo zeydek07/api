@@ -194,6 +194,29 @@ Kayıttan sonra belgenin PDF kopyası teslim alana (geri almada teslim edene) e-
 tutulur (`email_status`: `sent` / `failed` / `null`, `email_to`, `emailed_at`, `email_error`). E-posta hatası kaydı geri almaz;
 belge panelden ya da mobilden yeniden gönderilebilir. Kayıtlı kişinin e-postası yoksa yazılan adres kişiye de kaydedilir.
 
+### Vakalar ve faturalama (yetki: `cases.create`, `cases.approve`, `cases.view_all`, `billing.manage`)
+
+Döngü: **planlandı → (ameliyat) kaydedildi / onay bekliyor → onaylandı → satırlar faturalanır**; her aşamada iptal edilebilir.
+Vaka satırı durumları: `used` (kullanıldı) ve `opened` (açıldı) stoktan düşer ve faturalanır; `unused` (kullanılmadı) yalnızca kayıttır.
+Ürün hastanenin konsinye lokasyonundan ya da personelin aracından düşer. Hasta adı tutulmaz, yalnızca protokol no.
+
+| Yöntem | Adres | Açıklama |
+|---|---|---|
+| GET | `/api/cases?scope=today\|upcoming\|past\|overdue&status=&billing=pending\|invoiced&hospital_id=&q=` | Vakalar (kendi / ekip / herkes, yetkiye göre). `overdue`: saati geçmiş, ürünleri girilmemiş |
+| POST | `/api/cases` | Planla: `{hospital_id, scheduled_at, location_id?, doctor_id?, procedure?, protocol_no?, note?, user_id?}`. Saat dilimsiz saat Türkiye saatidir. Başka personel adına planlamak `cases.approve` ister |
+| PUT | `/api/cases/{id}` | Planı düzenle (yalnızca planlıyken) |
+| POST | `/api/cases/{id}/record` | Ürün kaydı: `items[{stock_id, quantity, status}]`, imza (zorunlu), `contact_id` ya da `signer_name`, `receiver_email?`, `photo?`, konum. `Idempotency-Key` desteklenir. Tutanağın PDF kopyası e-postayla gider |
+| POST | `/api/cases/{id}/approve` | Onayla (`cases.approve`) |
+| POST | `/api/cases/{id}/cancel` | `{reason}`; kaydedilmiş vakada düşülen ürünler yerine geri konur. Faturalanmış satır varsa iptal edilemez |
+| GET / POST | `/api/cases/{id}/pdf` · `/api/cases/{id}/email` | Kullanım tutanağı PDF'i, e-postayla (yeniden) gönderim |
+| GET | `/api/billing/items?status=pending\|invoiced` | Onaylı vakaların faturalanacak / faturalanmış satırları (`billing.manage`) |
+| POST | `/api/billing/invoice` · `/api/billing/uninvoice` | `{item_ids, invoice_number, invoice_date}` ile faturalandı işaretle (kısmi olabilir) / işareti geri al |
+| GET / POST / PUT | `/api/hospitals/{id}/doctors` · `/api/doctors` | Hastaneye bağlı doktorlar; saha personeli vaka sırasında doktor ekleyebilir |
+| GET | `/api/mobile/home` | Saha ana sayfası: bugünkü vakalar, kaydı gecikenler, gönderilemeyen e-postalar, SKT uyarıları |
+
+Saatler veritabanında UTC tutulur; belgeler ve "bugün" hesabı `DISPLAY_TIMEZONE` (varsayılan Europe/Istanbul) ile yapılır.
+Güncellemeden sonra yeni yetkilerin mevcut rollere eklenmesi için: `php artisan migrate && php artisan db:seed`.
+
 ### Hata yanıtları
 | Kod | Anlamı |
 |---|---|

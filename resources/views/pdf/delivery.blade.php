@@ -3,7 +3,7 @@
     $fmt = fn ($n) => rtrim(rtrim(number_format((float) $n, 2, ',', '.'), '0'), ',');
     $units = $d->lines->sum(fn ($l) => (float) $l->quantity);
     $address = $d->hospital?->address ?: collect([$d->hospital?->district, $d->hospital?->city])->filter()->join(', ');
-    $tz = config('app.timezone');
+    $tz = config('app.display_timezone');
 @endphp
 <!doctype html>
 <html lang="tr">

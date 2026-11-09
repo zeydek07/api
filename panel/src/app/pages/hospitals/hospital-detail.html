@@ -64,6 +64,12 @@
     @case ('teslimatlar') {
       <app-hospital-deliveries [hospitalId]="d.hospital.id" />
     }
+    @case ('vakalar') {
+      <app-hospital-cases [hospitalId]="d.hospital.id" />
+    }
+    @case ('doktorlar') {
+      <app-hospital-doctors [hospitalId]="d.hospital.id" />
+    }
     @case ('kisiler') {
       <app-hospital-contacts [hospitalId]="d.hospital.id" [locations]="locations()" />
     }

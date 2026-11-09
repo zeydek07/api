@@ -275,7 +275,9 @@ export type MovementType =
   | 'consign_out'
   | 'consign_in'
   | 'return_out'
-  | 'return_in';
+  | 'return_in'
+  | 'case_use'
+  | 'case_cancel';
 
 export interface Movement {
   id: number;
@@ -308,6 +310,8 @@ export const MOVEMENT_LABELS: Record<MovementType, string> = {
   consign_in: 'Konsinye teslim (hastaneye)',
   return_out: 'Geri alma (hastaneden)',
   return_in: 'Geri alma (araca)',
+  case_use: 'Vakada kullanım',
+  case_cancel: 'Vaka iptali (geri kondu)',
 };
 
 export const WAREHOUSE_LABELS: Record<WarehouseType, string> = {
@@ -316,3 +320,127 @@ export const WAREHOUSE_LABELS: Record<WarehouseType, string> = {
   field: 'Personel çantası / araç',
   consignment: 'Hastane konsinye lokasyonu',
 };
+
+// =============================================================== Vaka döngüsü
+
+export type CaseStatus = 'planned' | 'recorded' | 'approved' | 'cancelled';
+
+export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
+  planned: 'Planlandı',
+  recorded: 'Onay bekliyor',
+  approved: 'Onaylandı',
+  cancelled: 'İptal',
+};
+
+export const CASE_STATUS_BADGES: Record<CaseStatus, string> = {
+  planned: 'badge-primary',
+  recorded: 'badge-warn',
+  approved: 'badge-ok',
+  cancelled: 'badge-danger',
+};
+
+export type CaseItemStatus = 'used' | 'opened' | 'unused';
+
+export const CASE_ITEM_LABELS: Record<CaseItemStatus, string> = {
+  used: 'Kullanıldı',
+  opened: 'Açıldı',
+  unused: 'Kullanılmadı',
+};
+
+export interface Doctor {
+  id: number;
+  hospital_id: number;
+  name: string;
+  title: string | null;
+  branch: string | null;
+  phone: string | null;
+  email: string | null;
+  is_active: boolean;
+  display_name: string;
+  cases_count?: number;
+  hospital?: { id: number; name: string };
+}
+
+export interface SurgeryCaseItem {
+  id: number;
+  status: CaseItemStatus;
+  quantity: string;
+  lot_number: string | null;
+  serial_number: string | null;
+  expiry_date: string | null;
+  expired_at_use: boolean;
+  invoice_number: string | null;
+  invoice_date: string | null;
+  invoiced_at: string | null;
+  billable: boolean;
+  product?: { id: number; name: string; code: string; gtin: string | null; unit: string; tracking: Tracking };
+  warehouse?: { id: number; name: string; path?: string | null; type: WarehouseType };
+}
+
+export interface SurgeryCase {
+  id: number;
+  number: string;
+  status: CaseStatus;
+  scheduled_at: string;
+  performed_at: string | null;
+  procedure: string | null;
+  protocol_no: string | null;
+  note: string | null;
+  is_overdue: boolean;
+  has_signature: boolean;
+  has_photo: boolean;
+  email_status: 'sent' | 'failed' | null;
+  email_to: string | null;
+  emailed_at?: string | null;
+  email_error?: string | null;
+  hospital?: { id: number; name: string; city?: string | null; district?: string | null; address?: string | null };
+  location?: { id: number; name: string; path?: string | null } | null;
+  doctor?: { id: number; name: string; title: string | null; branch: string | null; display_name: string } | null;
+  user?: { id: number; name: string };
+  creator?: { name: string } | null;
+  recorder?: { name: string } | null;
+  approver?: { name: string } | null;
+  canceller?: { name: string } | null;
+  contact?: { id: number; name: string; title: string | null; phone: string | null; email: string | null } | null;
+  signer_name?: string | null;
+  signer_title?: string | null;
+  approved_at?: string | null;
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
+  location_accuracy?: number | null;
+  location_error?: string | null;
+  device_time?: string | null;
+  items_count?: number;
+  billable_count?: number;
+  invoiced_count?: number;
+  billable_units?: string | number;
+  items?: SurgeryCaseItem[];
+}
+
+/** Faturalama ekranındaki satır */
+export interface BillingItem {
+  id: number;
+  status: CaseItemStatus;
+  quantity: string;
+  lot_number: string | null;
+  serial_number: string | null;
+  expiry_date: string | null;
+  invoice_number: string | null;
+  invoice_date: string | null;
+  invoiced_at: string | null;
+  product?: { id: number; name: string; code: string; gtin: string | null; unit: string };
+  surgery_case?: {
+    id: number;
+    number: string;
+    hospital_id: number;
+    performed_at: string | null;
+    procedure: string | null;
+    protocol_no: string | null;
+    hospital?: { id: number; name: string };
+    doctor?: { id: number; name: string; title: string | null; display_name: string } | null;
+    user?: { id: number; name: string };
+  };
+  invoicer?: { id: number; name: string } | null;
+}

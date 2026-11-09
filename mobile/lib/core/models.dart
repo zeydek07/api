@@ -96,3 +96,61 @@ String _today() => DateTime.now().toIso8601String().substring(0, 10);
 
 /// Türkçe küçük harf (I → ı, İ → i); aramalarda kullanılır.
 String trLower(String s) => s.replaceAll('I', 'ı').replaceAll('İ', 'i').toLowerCase();
+
+// ---------------------------------------------------------------- saat
+
+/// Türkiye saati (UTC+3, yaz saati uygulaması yok). Sunucu saatleri UTC döner;
+/// cihazın saat dilimi ne olursa olsun Türkiye saati gösterilir.
+DateTime? trTime(String? iso) => iso == null ? null : DateTime.parse(iso).toUtc().add(const Duration(hours: 3));
+
+DateTime trNow() => DateTime.now().toUtc().add(const Duration(hours: 3));
+
+String two(int n) => n.toString().padLeft(2, '0');
+
+String hm(DateTime d) => '${two(d.hour)}:${two(d.minute)}';
+
+const _months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+const _days = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+
+/// "9 Kasım Pazartesi"
+String longDate(DateTime d) => '${d.day} ${_months[d.month - 1]} ${_days[d.weekday - 1]}';
+
+/// "Bugün" / "Yarın" / "Dün" / "12 Kasım Perşembe"
+String dayLabel(DateTime d) {
+  final today = trNow();
+  final diff = DateTime(d.year, d.month, d.day).difference(DateTime(today.year, today.month, today.day)).inDays;
+  return switch (diff) { 0 => 'Bugün', 1 => 'Yarın', -1 => 'Dün', _ => longDate(d) };
+}
+
+/// Sunucuya gönderilen Türkiye saati: "2026-11-10 09:30"
+String trWire(DateTime d) => '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+
+// ---------------------------------------------------------------- vaka
+
+class SurgeryCase {
+  SurgeryCase(this.json);
+  final Map<String, dynamic> json;
+
+  int get id => json['id'];
+  String get number => json['number'] ?? '';
+  String get status => json['status'] ?? 'planned';
+  DateTime get scheduledAt => trTime(json['scheduled_at'])!;
+  DateTime? get performedAt => trTime(json['performed_at']);
+  Map<String, dynamic>? get hospital => (json['hospital'] as Map?)?.cast<String, dynamic>();
+  Map<String, dynamic>? get location => (json['location'] as Map?)?.cast<String, dynamic>();
+  Map<String, dynamic>? get doctor => (json['doctor'] as Map?)?.cast<String, dynamic>();
+  String get hospitalName => hospital?['name'] ?? '';
+  String? get locationPath => location?['path'] ?? location?['name'];
+  String? get doctorName => doctor == null ? null : (doctor!['display_name'] ?? doctor!['name']);
+  String? get procedure => json['procedure'];
+  String? get protocolNo => json['protocol_no'];
+  bool get isOverdue => json['is_overdue'] == true;
+  bool get isPlanned => status == 'planned';
+  List<Map<String, dynamic>> get items => [for (final i in (json['items'] as List? ?? [])) Map<String, dynamic>.from(i)];
+
+  static const labels = {'planned': 'Planlandı', 'recorded': 'Onay bekliyor', 'approved': 'Onaylandı', 'cancelled': 'İptal'};
+
+  String get statusLabel => isOverdue ? 'Kaydı bekliyor' : labels[status] ?? status;
+}
+
+const itemStatusLabels = {'used': 'Kullanıldı', 'opened': 'Açıldı', 'unused': 'Kullanılmadı'};

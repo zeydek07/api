@@ -18,6 +18,9 @@ return [
     // Belgelerde (PDF, e-posta) görünen firma adı
     'company' => env('COMPANY_NAME', 'Medikal Stok'),
 
+    // Belgelerde gösterilen saat ve "bugün" hesabı (kayıtlar UTC tutulur)
+    'display_timezone' => env('DISPLAY_TIMEZONE', 'Europe/Istanbul'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

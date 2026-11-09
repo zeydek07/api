@@ -18,7 +18,10 @@ import '../ui/stock_picker.dart';
 /// Geri al: hastanedeki lokasyondan araca.
 /// Konum kaydet anında alınır; alınamazsa nedeni gönderilir.
 class DeliveryPage extends StatefulWidget {
-  const DeliveryPage({super.key});
+  const DeliveryPage({super.key, this.initialReturn = false});
+
+  /// "Geri al" sekmesiyle aç
+  final bool initialReturn;
 
   @override
   State<DeliveryPage> createState() => _DeliveryPageState();
@@ -59,6 +62,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
   @override
   void initState() {
     super.initState();
+    _isReturn = widget.initialReturn;
+    _cart.blockExpired = !_isReturn;
     _signature.onDrawEnd = () => setState(() => _signed = _signature.isNotEmpty);
     _api.get('hospitals', {'is_active': 1, 'per_page': 100}).then((r) {
       setState(() => _hospitals = List<Map<String, dynamic>>.from(r['data']));

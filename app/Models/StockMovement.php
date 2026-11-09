@@ -28,14 +28,20 @@ class StockMovement extends Model
 
     public const TYPE_RETURN_IN = 'return_in';
 
+    /** Vaka: ameliyatta kullanılan / açılan ürün düşümü ve vaka iptalinde geri konması */
+    public const TYPE_CASE_USE = 'case_use';
+
+    public const TYPE_CASE_CANCEL = 'case_cancel';
+
     public const TYPES = [
         self::TYPE_IN, self::TYPE_USAGE, self::TYPE_TRANSFER_OUT,
         self::TYPE_TRANSFER_IN, self::TYPE_ADJUSTMENT,
         self::TYPE_CONSIGN_OUT, self::TYPE_CONSIGN_IN, self::TYPE_RETURN_OUT, self::TYPE_RETURN_IN,
+        self::TYPE_CASE_USE, self::TYPE_CASE_CANCEL,
     ];
 
     protected $fillable = [
-        'batch_uuid', 'type', 'product_id', 'warehouse_id', 'user_id', 'hospital_id', 'delivery_id',
+        'batch_uuid', 'type', 'product_id', 'warehouse_id', 'user_id', 'hospital_id', 'delivery_id', 'surgery_case_id',
         'quantity', 'balance_after', 'lot_number', 'serial_number', 'expiry_date',
         'reference', 'note', 'latitude', 'longitude', 'location_accuracy', 'location_error',
     ];
@@ -74,6 +80,11 @@ class StockMovement extends Model
     public function delivery(): BelongsTo
     {
         return $this->belongsTo(Delivery::class);
+    }
+
+    public function surgeryCase(): BelongsTo
+    {
+        return $this->belongsTo(SurgeryCase::class);
     }
 
     public function user(): BelongsTo

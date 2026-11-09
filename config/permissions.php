@@ -36,6 +36,14 @@ return [
         'usage' => ['label' => 'Saha Kullanımı', 'actions' => [
             'create' => 'Stoktan ürün düş / hastaneye teslim',
         ]],
+        'cases' => ['label' => 'Vakalar', 'actions' => [
+            'create' => 'Vaka planla / ürünlerini kaydet',
+            'approve' => 'Vaka onayla / iptal et',
+            'view_all' => 'Tüm vakaları gör',
+        ]],
+        'billing' => ['label' => 'Faturalama', 'actions' => [
+            'manage' => 'Faturalanacakları gör / faturalandı işaretle',
+        ]],
         'movements' => ['label' => 'Stok Hareketleri', 'actions' => [
             'view_team' => 'Ekibinin hareketlerini gör',
             'view_all' => 'Tüm hareketleri gör',
@@ -52,10 +60,11 @@ return [
             'hospitals.view', 'hospitals.create', 'hospitals.update',
             'warehouses.view', 'stock.view', 'stock.receive', 'stock.transfer', 'stock.adjust',
             'usage.create', 'deliveries.create', 'deliveries.cancel', 'movements.view_team', 'reports.view',
+            'cases.create', 'cases.approve', 'cases.view_all', 'billing.manage',
         ]],
         // Hastaneye ürün bırakır, teslim alır, ameliyat kullanımını kaydeder, iade ve sayım yapar
         'personel' => ['name' => 'Saha Personeli', 'permissions' => [
-            'products.view', 'hospitals.view', 'usage.create', 'deliveries.create',
+            'products.view', 'hospitals.view', 'usage.create', 'deliveries.create', 'cases.create',
         ]],
         // Ürün hazırlar, sevk eder, dönen ürünleri kabul eder, lot/seri ve miktar kontrolü yapar
         'depocu' => ['name' => 'Depo Sorumlusu', 'permissions' => [

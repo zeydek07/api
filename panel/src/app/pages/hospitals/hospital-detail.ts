@@ -8,7 +8,9 @@ import { API_URL, qty, toParams } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
 import { CanDirective } from '../../core/can.directive';
 import { ConsignmentLocation, HOSPITAL_LABELS, Hospital, Movement } from '../../core/models';
+import { CASE_VIEWERS } from '../../layout/menu';
 import { HospitalConsignmentTab, HospitalContactsTab, HospitalDeliveriesTab, HospitalLocationsTab } from './hospital-tabs';
+import { HospitalCasesTab, HospitalDoctorsTab } from './hospital-case-tabs';
 import { openModal } from '../../ui/modal';
 import { HospitalDialog } from './hospital-dialog';
 
@@ -36,6 +38,8 @@ function isoDate(d: Date): string {
     HospitalDeliveriesTab,
     HospitalContactsTab,
     HospitalLocationsTab,
+    HospitalDoctorsTab,
+    HospitalCasesTab,
   ],
   templateUrl: './hospital-detail.html',
 })
@@ -51,13 +55,16 @@ export class HospitalDetailPage {
 
   protected readonly data = signal<Detail | null>(null);
 
-  protected readonly tabs = [
+  private readonly allTabs: { key: string; label: string; icon: string; permission?: string[] }[] = [
     { key: 'konsinye', label: 'Konsinye stok', icon: 'inventory_2' },
     { key: 'teslimatlar', label: 'Teslimatlar', icon: 'receipt_long' },
+    { key: 'vakalar', label: 'Vakalar', icon: 'medical_services', permission: CASE_VIEWERS },
     { key: 'kisiler', label: 'Hastane personeli', icon: 'group' },
+    { key: 'doktorlar', label: 'Doktorlar', icon: 'stethoscope' },
     { key: 'lokasyonlar', label: 'Lokasyonlar', icon: 'shelves' },
     { key: 'kullanim', label: 'Kullanım geçmişi', icon: 'history' },
   ];
+  protected readonly tabs = this.allTabs.filter((t) => !t.permission || this.auth.can(t.permission));
   protected readonly tab = signal('konsinye');
   protected readonly allLocations = signal<ConsignmentLocation[]>([]);
   protected readonly locations = computed(() => this.allLocations().filter((l) => l.is_active));

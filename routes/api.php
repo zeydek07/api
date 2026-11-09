@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BillingController;
 use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\DoctorController;
 use App\Http\Controllers\Api\HospitalController;
 use App\Http\Controllers\Api\HospitalStructureController;
 use App\Http\Controllers\Api\MobileController;
@@ -11,6 +13,7 @@ use App\Http\Controllers\Api\ProvinceController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\StockController;
+use App\Http\Controllers\Api\SurgeryCaseController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
 use Illuminate\Support\Facades\Route;
@@ -85,6 +88,33 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::post('deliveries/{id}/email', [DeliveryController::class, 'email'])->whereNumber('id')->middleware([$seeDeliveries, 'throttle:usage']);
     Route::post('deliveries/{id}/cancel', [DeliveryController::class, 'cancel'])->whereNumber('id')->middleware('permission:deliveries.cancel');
 
+    // Vakalar: planla → ürünleri kaydet → onayla → faturala
+    $seeCases = 'permission:cases.create|cases.approve|cases.view_all|billing.manage';
+    $planCases = 'permission:cases.create|cases.approve';
+    Route::get('cases', [SurgeryCaseController::class, 'index'])->middleware($seeCases);
+    Route::get('cases/{id}', [SurgeryCaseController::class, 'show'])->whereNumber('id')->middleware($seeCases);
+    Route::post('cases', [SurgeryCaseController::class, 'store'])->middleware($planCases);
+    Route::put('cases/{id}', [SurgeryCaseController::class, 'update'])->whereNumber('id')->middleware($planCases);
+    Route::post('cases/{id}/record', [SurgeryCaseController::class, 'record'])->whereNumber('id')->middleware([$planCases, 'throttle:usage']);
+    Route::post('cases/{id}/approve', [SurgeryCaseController::class, 'approve'])->whereNumber('id')->middleware('permission:cases.approve');
+    Route::post('cases/{id}/cancel', [SurgeryCaseController::class, 'cancel'])->whereNumber('id')->middleware($planCases);
+    Route::get('cases/{id}/pdf', [SurgeryCaseController::class, 'pdf'])->whereNumber('id')->middleware($seeCases);
+    Route::post('cases/{id}/email', [SurgeryCaseController::class, 'email'])->whereNumber('id')->middleware([$seeCases, 'throttle:usage']);
+    Route::get('cases/{id}/{kind}', [SurgeryCaseController::class, 'proof'])->whereNumber('id')->whereIn('kind', ['signature', 'photo'])->middleware($seeCases);
+
+    // Faturalama
+    Route::prefix('billing')->middleware('permission:billing.manage')->controller(BillingController::class)->group(function () {
+        Route::get('items', 'index');
+        Route::post('invoice', 'invoice');
+        Route::post('uninvoice', 'uninvoice');
+    });
+
+    // Doktorlar (hastaneye bağlı)
+    Route::get('doctors', [DoctorController::class, 'index'])->middleware('permission:hospitals.view|cases.create|cases.approve');
+    Route::get('hospitals/{hospital}/doctors', [DoctorController::class, 'forHospital'])->middleware('permission:hospitals.view|cases.create|cases.approve');
+    Route::post('hospitals/{hospital}/doctors', [DoctorController::class, 'store'])->middleware('permission:hospitals.update|cases.create|cases.approve');
+    Route::put('hospitals/{hospital}/doctors/{doctor}', [DoctorController::class, 'update'])->middleware('permission:hospitals.update');
+
     // Hastane yapısı: konsinye lokasyonları, hastane personeli, konsinye stok
     Route::prefix('hospitals/{hospital}')->controller(HospitalStructureController::class)->group(function () {
         Route::get('locations', 'locations')->middleware('permission:hospitals.view|deliveries.create');
@@ -124,6 +154,7 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
         Route::get('warehouses', [MobileController::class, 'warehouses']);
         Route::get('warehouses/{warehouse}/stock', [MobileController::class, 'warehouseStock']);
         Route::get('hospitals', [MobileController::class, 'hospitals']);
+        Route::get('home', [MobileController::class, 'home']);
         Route::post('usages', [MobileController::class, 'storeUsage'])->middleware(['permission:usage.create', 'throttle:usage']);
         Route::get('usages', [MobileController::class, 'myUsages'])->middleware('permission:usage.create');
     });

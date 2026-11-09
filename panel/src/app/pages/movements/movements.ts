@@ -21,6 +21,8 @@ const TYPE_STYLE: Record<MovementType, { badge: string; icon: string }> = {
   consign_in: { badge: 'badge-primary', icon: 'local_hospital' },
   return_out: { badge: 'badge-warn', icon: 'undo' },
   return_in: { badge: 'badge-warn', icon: 'assignment_return' },
+  case_use: { badge: 'badge-primary', icon: 'medical_services' },
+  case_cancel: { badge: 'badge-warn', icon: 'undo' },
 };
 
 /** Kim, ne zaman, hangi depodan, ne kullandı */

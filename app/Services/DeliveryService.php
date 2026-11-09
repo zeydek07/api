@@ -9,10 +9,10 @@ use App\Models\Stock;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Support\CapturedLocation;
+use App\Support\ProofImage;
 use App\Models\Warehouse;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -22,8 +22,6 @@ use Illuminate\Validation\ValidationException;
  */
 class DeliveryService
 {
-    private const DISK = 'local'; // storage/app/private — herkese açık değil
-
     public function __construct(
         private readonly StockService $stock,
         private readonly DeliveryDocument $document,
@@ -50,8 +48,8 @@ class DeliveryService
         [$receiverName, $receiverTitle, $contactId] = $this->receiver($hospital, $data);
 
         // Kanıt görsellerini önceden çöz (geçersizse hiçbir şey kaydedilmeden hata dönsün)
-        $signature = $this->decodeImage($data['signature'] ?? null, 'signature', 600 * 1024);
-        $photo = $this->decodeImage($data['photo'] ?? null, 'photo', 6 * 1024 * 1024);
+        $signature = ProofImage::decode($data['signature'] ?? null, 'signature', ProofImage::SIGNATURE_MAX);
+        $photo = ProofImage::decode($data['photo'] ?? null, 'photo', ProofImage::PHOTO_MAX);
         if (! $isReturn && ! $signature) {
             throw ValidationException::withMessages(['signature' => 'Teslim alan kişinin imzası gerekli.']);
         }
@@ -115,10 +113,10 @@ class DeliveryService
         // Kanıt dosyaları: veritabanı kaydı başarılı olduktan sonra yazılır
         $paths = [];
         if ($signature) {
-            $paths['signature_path'] = $this->store($delivery, 'signature', $signature);
+            $paths['signature_path'] = ProofImage::store("deliveries/{$delivery->id}/signature", $signature);
         }
         if ($photo) {
-            $paths['photo_path'] = $this->store($delivery, 'photo', $photo);
+            $paths['photo_path'] = ProofImage::store("deliveries/{$delivery->id}/photo", $photo);
         }
         if ($paths) {
             $delivery->update($paths);
@@ -256,33 +254,6 @@ class DeliveryService
 
             return ['product_id' => $s->product_id, 'stock_id' => $s->id, 'quantity' => (float) $item['quantity']];
         }, $items);
-    }
-
-    private function decodeImage(?string $dataUrl, string $field, int $maxBytes): ?array
-    {
-        if (! $dataUrl) {
-            return null;
-        }
-        if (! preg_match('#^data:image/(png|jpe?g|webp);base64,(.+)$#', $dataUrl, $m)) {
-            throw ValidationException::withMessages([$field => 'Görsel PNG, JPEG veya WEBP olmalı.']);
-        }
-        $bytes = base64_decode($m[2], true);
-        if ($bytes === false || strlen($bytes) > $maxBytes) {
-            throw ValidationException::withMessages([$field => 'Görsel okunamadı ya da çok büyük (en fazla '.round($maxBytes / 1048576, 1).' MB).']);
-        }
-        if (@getimagesizefromstring($bytes) === false) {
-            throw ValidationException::withMessages([$field => 'Geçerli bir görsel değil.']);
-        }
-
-        return ['ext' => $m[1] === 'jpeg' ? 'jpg' : $m[1], 'bytes' => $bytes];
-    }
-
-    private function store(Delivery $delivery, string $name, array $image): string
-    {
-        $path = "deliveries/{$delivery->id}/{$name}.{$image['ext']}";
-        Storage::disk(self::DISK)->put($path, $image['bytes']);
-
-        return $path;
     }
 
     private function findByKey(User $user, string $key): ?Delivery

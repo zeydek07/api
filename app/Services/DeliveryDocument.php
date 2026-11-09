@@ -4,10 +4,10 @@ namespace App\Services;
 
 use App\Mail\DeliveryDocumentMail;
 use App\Models\Delivery;
+use App\Support\ProofImage;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -16,8 +16,6 @@ use Throwable;
  */
 class DeliveryDocument
 {
-    private const DISK = 'local';
-
     public function pdf(Delivery $delivery): string
     {
         $delivery->loadMissing([
@@ -34,8 +32,8 @@ class DeliveryDocument
         return Pdf::loadView('pdf.delivery', [
             'd' => $delivery,
             'company' => config('app.company'),
-            'signature' => $this->image($delivery->signature_path, 600),
-            'photo' => $this->image($delivery->photo_path, 1000),
+            'signature' => ProofImage::dataUri($delivery->signature_path, 600),
+            'photo' => ProofImage::dataUri($delivery->photo_path, 1000),
         ])->setPaper('a4')->setOption('isFontSubsettingEnabled', true)->output();
     }
 
@@ -63,30 +61,5 @@ class DeliveryDocument
 
             return false;
         }
-    }
-
-    /** Kanıt görselini PDF'e gömülecek data URI'ye çevirir; büyük fotoğraflar küçültülür. */
-    private function image(?string $path, int $maxWidth): ?string
-    {
-        if (! $path || ! Storage::disk(self::DISK)->exists($path)) {
-            return null;
-        }
-        $bytes = Storage::disk(self::DISK)->get($path);
-        $mime = (getimagesizefromstring($bytes) ?: [])['mime'] ?? 'image/png';
-
-        if (function_exists('imagecreatefromstring') && $mime !== 'image/png') {
-            $src = @imagecreatefromstring($bytes);
-            if ($src !== false) {
-                if (imagesx($src) > $maxWidth) {
-                    $src = imagescale($src, $maxWidth) ?: $src;
-                }
-                ob_start();
-                imagejpeg($src, null, 75);
-                $bytes = ob_get_clean();
-                $mime = 'image/jpeg';
-            }
-        }
-
-        return "data:{$mime};base64,".base64_encode($bytes);
     }
 }

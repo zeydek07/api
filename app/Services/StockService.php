@@ -135,6 +135,51 @@ class StockService
     }
 
     /**
+     * Vakada kullanılan / açılan ürünleri depodan (hastane dolabı ya da araç) düşer.
+     * Dışarıdaki transaction'ın içinde çalışır. Hedeflenmiş (stock_id) satırda SKT'si geçmiş
+     * ürün de düşülebilir: ürün fiilen kullanılmıştır, kayıt engellenmez (satır işaretlenir).
+     */
+    public function consume(User $user, Warehouse $warehouse, array $items, array $meta = []): Collection
+    {
+        $run = function () use ($user, $warehouse, $items, $meta) {
+            $batch = $meta['batch_uuid'] ?? (string) Str::uuid();
+            $products = $this->loadActiveProducts($items);
+            $movements = collect();
+            foreach ($this->sortItems($items) as $item) {
+                $movements->push(...$this->take($batch, StockMovement::TYPE_CASE_USE, $user, $warehouse->id, $products[$item['product_id']], $item, $meta, allowExpired: true));
+            }
+
+            return $movements;
+        };
+
+        return DB::transactionLevel() > 0 ? $run() : DB::transaction($run);
+    }
+
+    /**
+     * Vaka iptalinde düşülen ürünleri alındıkları yere aynı lot / seri / SKT ile geri koyar.
+     * Pasif ürün de geri konabilir (kayıt düzeltmesidir).
+     */
+    public function putBack(User $user, Warehouse $warehouse, array $items, array $meta = []): Collection
+    {
+        $run = function () use ($user, $warehouse, $items, $meta) {
+            $batch = $meta['batch_uuid'] ?? (string) Str::uuid();
+            $movements = collect();
+            foreach ($this->sortItems($items) as $item) {
+                $product = Product::withTrashed()->findOrFail($item['product_id']);
+                $movements->push($this->put($batch, StockMovement::TYPE_CASE_CANCEL, $user, $warehouse->id, $product, abs((float) $item['quantity']), [
+                    'lot_number' => $item['lot_number'] ?? null,
+                    'serial_number' => $item['serial_number'] ?? null,
+                    'expiry_date' => $item['expiry_date'] ?? null,
+                ], $item, $meta));
+            }
+
+            return $movements;
+        };
+
+        return DB::transactionLevel() > 0 ? $run() : DB::transaction($run);
+    }
+
+    /**
      * Sayım sonucu: bir lot/seri satırındaki miktarı sayılan değere eşitler, farkı hareket olarak yazar.
      * $target ile satır seçilir (stock_id, serial_number veya lot_number + expiry_date).
      * Hedef verilmezse ve depoda o ürünün tek satırı varsa o kullanılır.
@@ -246,6 +291,7 @@ class StockService
             'user_id' => $user->id,
             'hospital_id' => $meta['hospital_id'] ?? null,
             'delivery_id' => $meta['delivery_id'] ?? null,
+            'surgery_case_id' => $meta['surgery_case_id'] ?? null,
             'quantity' => $delta,
             'balance_after' => round($balance, 2),
             'lot_number' => $row->lot_number,
