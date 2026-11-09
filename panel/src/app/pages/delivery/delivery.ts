@@ -64,7 +64,9 @@ export class DeliveryPage implements OnInit {
   protected otherName = '';
   protected otherTitle = '';
   protected readonly addingContact = signal(false);
-  protected newContact = { name: '', title: '', phone: '' };
+  protected newContact = { name: '', title: '', phone: '', email: '' };
+  /** Belge kopyasının (PDF) gideceği e-posta; kişi seçilince kayıtlı adresi gelir */
+  protected emailTo = '';
   // 4. Ürünler
   protected readonly rows = signal<Stock[]>([]);
   protected readonly rowsLoading = signal(false);
@@ -126,9 +128,15 @@ export class DeliveryPage implements OnInit {
     this.otherPerson() ? true : !!this.contact(),
   );
 
+  protected emailInvalid(): boolean {
+    const e = this.emailTo.trim();
+    return !!e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  }
+
   protected canSubmit(): boolean {
     if (this.saving() || !this.hospital() || !this.location() || !this.vehicle() || this.lines().length === 0) return false;
     if (this.otherPerson() ? !this.otherName.trim() : !this.contact()) return false;
+    if (this.emailInvalid()) return false;
     return this.isReturn() || !!this.signature();
   }
 
@@ -139,6 +147,7 @@ export class DeliveryPage implements OnInit {
     if (!this.vehicle()) return 'Araç seçin';
     if (this.otherPerson() ? !this.otherName.trim() : !this.contact())
       return this.isReturn() ? 'Teslim eden kişiyi seçin' : 'Teslim alan kişiyi seçin';
+    if (this.emailInvalid()) return 'E-posta adresi geçersiz';
     if (!this.lines().length) return 'En az bir ürün ekleyin';
     if (!this.isReturn() && !this.signature()) return 'Teslim alanın imzası gerekli';
     return '';
@@ -267,12 +276,14 @@ export class DeliveryPage implements OnInit {
   protected pickContact(c: HospitalContact): void {
     this.otherPerson.set(false);
     this.contact.set(this.contact()?.id === c.id ? null : c);
+    this.emailTo = this.contact()?.email ?? '';
   }
 
   protected useOtherPerson(): void {
     this.contact.set(null);
     this.addingContact.set(false);
     this.otherPerson.set(true);
+    this.emailTo = '';
   }
 
   protected saveNewContact(): void {
@@ -283,6 +294,7 @@ export class DeliveryPage implements OnInit {
         name: this.newContact.name.trim(),
         title: this.newContact.title.trim() || null,
         phone: this.newContact.phone.trim() || null,
+        email: this.newContact.email.trim() || null,
         location_id: this.location()?.id ?? null,
       })
       .subscribe({
@@ -290,7 +302,8 @@ export class DeliveryPage implements OnInit {
           this.toast.success(`${c.name} hastane personeline eklendi.`);
           this.addingContact.set(false);
           this.otherPerson.set(false);
-          this.newContact = { name: '', title: '', phone: '' };
+          this.emailTo = c.email ?? '';
+          this.newContact = { name: '', title: '', phone: '', email: '' };
           this.loadContacts(h.id, c.id);
         },
         error: (e) => this.toast.error(errorMessage(e)),
@@ -397,6 +410,7 @@ export class DeliveryPage implements OnInit {
       contact_id: this.otherPerson() ? null : this.contact()?.id,
       receiver_name: this.otherPerson() ? this.otherName.trim() : null,
       receiver_title: this.otherPerson() ? this.otherTitle.trim() || null : null,
+      receiver_email: this.emailTo.trim() || null,
       items: this.lines().map((l) => ({ stock_id: l.stock.id, quantity: l.quantity })),
       signature: this.signature(),
       photo: this.photo(),
@@ -414,6 +428,9 @@ export class DeliveryPage implements OnInit {
           this.saving.set(false);
           this.done.set(r.delivery);
           this.toast.success(`${r.delivery.number} kaydedildi.`);
+          if (r.delivery.email_status === 'failed') this.toast.error(`Belge e-postası gönderilemedi: ${r.delivery.email_error}`);
+          // Kişiye yeni yazılan adres kaydedildi; listeyi tazele
+          if (this.emailTo.trim() && this.contact()) this.loadContacts(this.hospital()!.id, this.contact()!.id);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         },
         error: (e) => {

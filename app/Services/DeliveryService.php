@@ -24,7 +24,10 @@ class DeliveryService
 {
     private const DISK = 'local'; // storage/app/private — herkese açık değil
 
-    public function __construct(private readonly StockService $stock) {}
+    public function __construct(
+        private readonly StockService $stock,
+        private readonly DeliveryDocument $document,
+    ) {}
 
     /**
      * @param  array{type:string, hospital_id:int, location_id:int, vehicle_id:int, contact_id?:?int,
@@ -121,6 +124,11 @@ class DeliveryService
             $delivery->update($paths);
         }
 
+        // Belge kopyası hastane personeline (e-posta yoksa gönderilmez; panelden sonra gönderilebilir)
+        if ($to = $this->recipient($delivery, $data['receiver_email'] ?? null)) {
+            $this->document->email($delivery, $to);
+        }
+
         return ['delivery' => $delivery, 'replayed' => false];
     }
 
@@ -170,6 +178,21 @@ class DeliveryService
 
             return $delivery;
         });
+    }
+
+    /**
+     * Belgenin gideceği adres: elle yazılan e-posta, yoksa seçilen kişinin kayıtlı e-postası.
+     * Kayıtlı kişinin e-postası yoksa yazılan adres kişiye de kaydedilir (bir dahaki sefere hazır gelir).
+     */
+    private function recipient(Delivery $delivery, ?string $typed): ?string
+    {
+        $typed = $typed ? mb_strtolower(trim($typed)) : null;
+        $contact = $delivery->contact_id ? HospitalContact::find($delivery->contact_id) : null;
+        if ($typed && $contact && ! $contact->email) {
+            $contact->update(['email' => $typed]);
+        }
+
+        return $typed ?: $contact?->email;
     }
 
     /** Kullanıcının ürün taşıyabileceği araç/depolar (firma depoları) */

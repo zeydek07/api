@@ -15,6 +15,9 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    // Belgelerde (PDF, e-posta) görünen firma adı
+    'company' => env('COMPANY_NAME', 'Medikal Stok'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

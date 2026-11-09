@@ -6,7 +6,7 @@ Panelle aynı API'yi kullanır. Personel kendi hesabıyla girer ve yalnızca yet
 |---|---|---|
 | Stok Girişi | `stock.receive` | Depoya mal kabul. Karekod okutulunca ürün, lot, seri ve SKT kendiliğinden dolar. |
 | Stok Çıkışı | `stock.transfer` | Depodan araca veya başka depoya transfer. SKT'si geçmiş lot çıkarılamaz. |
-| Hastane Teslimatı | `deliveries.create` | Araçtan hastaneye teslim (imza zorunlu) ve hastaneden geri alma. Konum kaydet anında alınır; alınamazsa belge "konum alınamadı" olarak işaretlenir. |
+| Hastane Teslimatı | `deliveries.create` | Araçtan hastaneye teslim (imza zorunlu) ve hastaneden geri alma. Konum kaydet anında alınır; alınamazsa belge "konum alınamadı" olarak işaretlenir. Fotoğraf (kamera ya da galeri) eklenebilir; belgenin PDF kopyası teslim alanın e-postasına gider. |
 | Ürün Sorgula | `products.view` | Barkod okut; ürünün hangi depoda ve lotta ne kadar olduğunu gösterir. |
 
 Barkod kamerayla okunur (Google ML Kit, `mobile_scanner`): GS1 DataMatrix, QR, EAN-13/8, Code 128/39, ITF-14. Kamerası olmayan cihazda "Elle gir" ile kod yazılabilir.

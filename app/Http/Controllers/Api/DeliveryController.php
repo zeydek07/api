@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Models\User;
+use App\Services\DeliveryDocument;
 use App\Services\DeliveryService;
 use App\Support\CapturedLocation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -20,7 +22,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class DeliveryController extends Controller
 {
-    public function __construct(private readonly DeliveryService $deliveries) {}
+    public function __construct(
+        private readonly DeliveryService $deliveries,
+        private readonly DeliveryDocument $document,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -81,6 +86,7 @@ class DeliveryController extends Controller
             'contact_id' => ['nullable', 'integer'],
             'receiver_name' => ['nullable', 'string', 'max:255'],
             'receiver_title' => ['nullable', 'string', 'max:120'],
+            'receiver_email' => ['nullable', 'email', 'max:255'],
             'items' => ['required', 'array', 'min:1', 'max:300'],
             'items.*.stock_id' => ['required', 'integer'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:100000'],
@@ -112,6 +118,40 @@ class DeliveryController extends Controller
         $this->deliveries->cancel($request->user(), $delivery, $data['reason']);
 
         return response()->json(['message' => "{$delivery->number} iptal edildi; ürünler geri taşındı."]);
+    }
+
+    /** Belgenin PDF kopyası */
+    public function pdf(Request $request, int $id): Response
+    {
+        $delivery = self::scoped($request->user())->findOrFail($id);
+
+        return response($this->document->pdf($delivery), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$this->document->filename($delivery).'"',
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
+    /** Belge kopyasını e-postayla (yeniden) gönder */
+    public function email(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['email' => ['nullable', 'email', 'max:255']]);
+        $delivery = self::scoped($request->user())->with('contact:id,email')->findOrFail($id);
+        if ($delivery->status !== Delivery::STATUS_COMPLETED) {
+            return response()->json(['message' => 'İptal edilmiş belge gönderilemez.'], 422);
+        }
+        $to = $data['email'] ?? $delivery->contact?->email ?? $delivery->email_to;
+        if (! $to) {
+            return response()->json(['message' => 'Gönderilecek e-posta adresi yok; adres yazın.', 'errors' => ['email' => ['E-posta adresi gerekli.']]], 422);
+        }
+
+        $ok = $this->document->email($delivery, mb_strtolower(trim($to)));
+        $delivery->refresh();
+
+        return response()->json([
+            'message' => $ok ? "Belge {$delivery->email_to} adresine gönderildi." : 'E-posta gönderilemedi: '.$delivery->email_error,
+            'delivery' => $delivery->only(['id', 'email_to', 'email_status', 'emailed_at', 'email_error']),
+        ], $ok ? 200 : 502);
     }
 
     /** İmza / fotoğraf: token'lı istekle görsel olarak döner */

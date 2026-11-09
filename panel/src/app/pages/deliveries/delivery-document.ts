@@ -66,6 +66,60 @@ export class CancelDeliveryDialog {
   }
 }
 
+/** Belge kopyasını e-postayla gönderme penceresi */
+@Component({
+  imports: [FormsModule, ModalFrame],
+  template: `
+    <app-modal title="Belgeyi e-postayla gönder" [subtitle]="data.number">
+      <div class="space-y-3">
+        <p class="text-sm text-muted">Belgenin PDF kopyası aşağıdaki adrese gönderilir.</p>
+        <div>
+          <label class="label" for="send-email">E-posta *</label>
+          <input id="send-email" type="email" class="input" [(ngModel)]="email" (keydown.enter)="send()" />
+        </div>
+        @if (error()) {
+          <p class="form-error">{{ error() }}</p>
+        }
+      </div>
+      <div modal-footer class="flex gap-2">
+        <button class="btn btn-secondary" (click)="ref.close(false)">Vazgeç</button>
+        <button class="btn btn-primary" [disabled]="!valid() || saving()" (click)="send()">
+          <span class="icon">send</span> {{ saving() ? 'Gönderiliyor…' : 'Gönder' }}
+        </button>
+      </div>
+    </app-modal>
+  `,
+})
+export class EmailDeliveryDialog {
+  protected readonly data = inject<Delivery>(DIALOG_DATA);
+  protected readonly ref = inject<DialogRef<boolean>>(DialogRef);
+  private readonly http = inject(HttpClient);
+  private readonly toast = inject(ToastService);
+  protected email = this.data.email_to ?? this.data.contact?.email ?? '';
+  protected readonly saving = signal(false);
+  protected readonly error = signal('');
+
+  protected valid(): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email.trim());
+  }
+
+  protected send(): void {
+    if (!this.valid() || this.saving()) return;
+    this.saving.set(true);
+    this.error.set('');
+    this.http.post<{ message: string }>(`${API_URL}/deliveries/${this.data.id}/email`, { email: this.email.trim() }).subscribe({
+      next: (r) => {
+        this.toast.success(r.message);
+        this.ref.close(true);
+      },
+      error: (e) => {
+        this.error.set(errorMessage(e));
+        this.saving.set(false);
+      },
+    });
+  }
+}
+
 /** Yazdırılabilir teslimat belgesi (tarayıcıdan "PDF olarak kaydet" ile PDF olur) */
 @Component({
   imports: [DatePipe, RouterLink, ExpiryBadge],
@@ -133,6 +187,26 @@ export class DeliveryDocumentPage implements OnDestroy {
 
   protected print(): void {
     window.print();
+  }
+
+  /** Sunucuda üretilen PDF (e-postayla gidenle aynı) */
+  protected downloadPdf(): void {
+    const d = this.d();
+    if (!d) return;
+    this.http.get(`${API_URL}/deliveries/${d.id}/pdf`, { responseType: 'blob' }).subscribe((b) => {
+      const url = URL.createObjectURL(b);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${d.number}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    });
+  }
+
+  protected sendEmail(): void {
+    const d = this.d();
+    if (!d) return;
+    openModal<boolean>(this.dialog, EmailDeliveryDialog, d, 'md').subscribe(() => this.load());
   }
 
   protected cancel(): void {

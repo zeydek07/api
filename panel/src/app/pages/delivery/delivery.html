@@ -11,6 +11,17 @@
       {{ lines().length }} kalem / {{ qty(totalUnits()) }} adet.
       {{ d.type === 'return' ? 'Ürünler aracınıza geçti.' : 'Ürünler hastanenin konsinye stoğuna geçti.' }}
     </p>
+    @if (d.email_status === 'sent') {
+      <p class="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-ok-soft px-3 py-1.5 text-sm text-ok">
+        <span class="icon text-[18px]">mark_email_read</span> Belge kopyası {{ d.email_to }} adresine gönderildi
+      </p>
+    } @else if (d.email_status === 'failed') {
+      <p class="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-danger-soft px-3 py-1.5 text-sm text-danger">
+        <span class="icon text-[18px]">error</span> E-posta gönderilemedi · belge sayfasından yeniden gönderebilirsiniz
+      </p>
+    } @else {
+      <p class="mt-3 text-sm text-muted">E-posta adresi girilmediği için belge kopyası gönderilmedi.</p>
+    }
     <div class="mt-6 flex flex-wrap justify-center gap-2">
       <a class="btn btn-secondary" [routerLink]="['/teslimatlar', d.id]"><span class="icon">description</span> Belgeyi görüntüle</a>
       <button class="btn btn-primary" (click)="startNew()"><span class="icon">add</span> Yeni belge</button>
@@ -195,7 +206,7 @@
               }
 
               @if (addingContact()) {
-                <div class="grid gap-3 rounded-xl bg-surface-2 p-4 sm:grid-cols-3">
+                <div class="grid gap-3 rounded-xl bg-surface-2 p-4 sm:grid-cols-2">
                   <div>
                     <label class="label" for="nc-name">Ad soyad *</label>
                     <input id="nc-name" class="input" [(ngModel)]="newContact.name" />
@@ -208,13 +219,17 @@
                     <label class="label" for="nc-phone">Telefon</label>
                     <input id="nc-phone" class="input" [(ngModel)]="newContact.phone" />
                   </div>
-                  <div class="flex justify-end gap-2 sm:col-span-3">
+                  <div>
+                    <label class="label" for="nc-email">E-posta</label>
+                    <input id="nc-email" type="email" class="input" [(ngModel)]="newContact.email" />
+                  </div>
+                  <div class="flex justify-end gap-2 sm:col-span-2">
                     <button class="btn btn-ghost btn-sm" (click)="addingContact.set(false)">Vazgeç</button>
                     <button class="btn btn-primary btn-sm" [disabled]="!newContact.name.trim()" (click)="saveNewContact()">
                       Kaydet ve seç
                     </button>
                   </div>
-                  <p class="hint sm:col-span-3">Kişi bu hastanenin personel listesine eklenir; sonraki teslimatlarda tek dokunuşla seçilir.</p>
+                  <p class="hint sm:col-span-2">Kişi bu hastanenin personel listesine eklenir; sonraki teslimatlarda tek dokunuşla seçilir.</p>
                 </div>
               }
 
@@ -229,6 +244,18 @@
                     <input id="op-title" class="input" [(ngModel)]="otherTitle" />
                   </div>
                   <p class="hint sm:col-span-2">Yalnızca bu belgeye yazılır, listeye eklenmez.</p>
+                </div>
+              }
+
+              @if (contact() || otherPerson()) {
+                <div>
+                  <label class="label" for="d-email">Belge kopyasının gideceği e-posta</label>
+                  <input id="d-email" type="email" class="input" [class.border-danger]="emailInvalid()" [attr.aria-invalid]="emailInvalid()" [(ngModel)]="emailTo" placeholder="ör. hemsire@hastane.gov.tr" />
+                  <p class="hint">
+                    Kayıttan sonra PDF belge bu adrese gönderilir; hastane teslimatı belgeli olarak almış olur.
+                    @if (contact() && !contact()!.email) { Yazılan adres kişinin kaydına da eklenir. }
+                    Boş bırakılırsa gönderilmez.
+                  </p>
                 </div>
               }
             </div>

@@ -231,6 +231,11 @@ export interface Delivery {
   note: string | null;
   has_signature: boolean;
   has_photo: boolean;
+  email_to?: string | null;
+  /** sent | failed | null (gönderilmedi) */
+  email_status?: 'sent' | 'failed' | null;
+  emailed_at?: string | null;
+  email_error?: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
   lines_count?: number;

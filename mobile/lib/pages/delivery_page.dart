@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:signature/signature.dart';
 import 'package:uuid/uuid.dart';
 
@@ -39,6 +41,12 @@ class _DeliveryPageState extends State<DeliveryPage> {
   final _otherTitle = TextEditingController();
   final _note = TextEditingController();
 
+  /// Belge kopyasının (PDF) gideceği e-posta; kişi seçilince kayıtlı adresi gelir
+  final _email = TextEditingController();
+
+  /// Teslimat / geri alma fotoğrafı (JPEG, küçültülmüş)
+  Uint8List? _photo;
+
   final _cart = StockCart();
   bool _rowsLoading = false;
   final _signature = SignatureController(penStrokeWidth: 2.5, penColor: Colors.black);
@@ -65,6 +73,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
   @override
   void dispose() {
     _signature.dispose();
+    _email.dispose();
     super.dispose();
   }
 
@@ -168,6 +177,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
     final name = TextEditingController();
     final title = TextEditingController();
     final phone = TextEditingController();
+    final email = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -180,6 +190,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
             TextField(controller: title, decoration: const InputDecoration(labelText: 'Unvan (ör. Sorumlu hemşire)')),
             const SizedBox(height: 12),
             TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Telefon')),
+            const SizedBox(height: 12),
+            TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'E-posta')),
           ],
         ),
         actions: [
@@ -194,6 +206,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
         'name': name.text.trim(),
         'title': title.text.trim().isEmpty ? null : title.text.trim(),
         'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
+        'email': email.text.trim().isEmpty ? null : email.text.trim(),
         'location_id': _location?.id,
       });
       await _loadContacts();
@@ -201,10 +214,35 @@ class _DeliveryPageState extends State<DeliveryPage> {
       setState(() {
         _otherPerson = false;
         _contact = _contacts.where((x) => x['id'] == c['id']).firstOrNull;
+        _email.text = c['email'] ?? '';
       });
       showMessage(context, '${c['name']} hastane personeline eklendi.');
     } catch (e) {
       _onError(e);
+    }
+  }
+
+  bool get _emailInvalid {
+    final e = _email.text.trim();
+    return e.isNotEmpty && !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(e);
+  }
+
+  void _pickContact(Map<String, dynamic>? c) => setState(() {
+        _otherPerson = false;
+        _contact = c;
+        _email.text = c?['email'] ?? '';
+      });
+
+  /// Kamera ya da galeriden fotoğraf; sunucuya gitmeden küçültülür
+  Future<void> _takePhoto(ImageSource source) async {
+    FocusScope.of(context).unfocus();
+    try {
+      final file = await ImagePicker().pickImage(source: source, maxWidth: 1600, maxHeight: 1600, imageQuality: 70);
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (mounted) setState(() => _photo = bytes);
+    } catch (e) {
+      _onError('Fotoğraf alınamadı: $e');
     }
   }
 
@@ -215,6 +253,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
     if (_otherPerson ? _otherName.text.trim().isEmpty : _contact == null) {
       return _isReturn ? 'Teslim eden kişiyi seçin' : 'Teslim alan kişiyi seçin';
     }
+    if (_emailInvalid) return 'E-posta adresi geçersiz';
     if (_cart.lines.isEmpty) return 'En az bir ürün seçin';
     if (!_isReturn && !_signed) return 'Teslim alanın imzası gerekli';
     return null;
@@ -240,8 +279,10 @@ class _DeliveryPageState extends State<DeliveryPage> {
           'contact_id': _otherPerson ? null : _contact?['id'],
           'receiver_name': _otherPerson ? _otherName.text.trim() : null,
           'receiver_title': _otherPerson && _otherTitle.text.trim().isNotEmpty ? _otherTitle.text.trim() : null,
+          'receiver_email': _email.text.trim().isEmpty ? null : _email.text.trim(),
           'items': [for (final (row, q) in _cart.lines) {'stock_id': row.id, 'quantity': q}],
           'signature': signature,
+          'photo': _photo == null ? null : 'data:image/jpeg;base64,${base64Encode(_photo!)}',
           'note': _note.text.trim().isEmpty ? null : _note.text.trim(),
           ...location.toJson(),
           'device_time': DateTime.now().toUtc().toIso8601String(),
@@ -250,6 +291,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
       );
       if (!mounted) return;
       setState(() => _done = Map<String, dynamic>.from(r['delivery'])..['_location'] = location.label);
+      // Kişiye yeni yazılan e-posta kaydedildi; listeyi tazele
+      if (_contact != null && _email.text.trim().isNotEmpty) _loadContacts().catchError((_) {});
     } on ApiException catch (e) {
       if (!mounted) return;
       showMessage(context, e.message, error: true);
@@ -284,8 +327,40 @@ class _DeliveryPageState extends State<DeliveryPage> {
       _signature.clear();
       _signed = false;
       _note.clear();
+      _photo = null;
     });
     _loadRows();
+  }
+
+  /// Belge kopyasını (yeniden) e-postayla gönder
+  Future<void> _sendEmail() async {
+    final d = _done!;
+    final ctrl = TextEditingController(text: d['email_to'] ?? _email.text);
+    final to = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Belgeyi e-postayla gönder'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(labelText: 'E-posta'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Gönder')),
+        ],
+      ),
+    );
+    if (to == null || to.isEmpty || !mounted) return;
+    try {
+      final r = await _api.post('deliveries/${d['id']}/email', {'email': to});
+      if (!mounted) return;
+      setState(() => d.addAll(Map<String, dynamic>.from(r['delivery'])));
+      showMessage(context, r['message']);
+    } on ApiException catch (e) {
+      if (mounted) showMessage(context, e.message, error: true);
+    }
   }
 
   @override
@@ -353,10 +428,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
                     ChoiceChip(
                       label: Text(c['title'] == null ? c['name'] : '${c['name']} · ${c['title']}'),
                       selected: !_otherPerson && _contact?['id'] == c['id'],
-                      onSelected: (_) => setState(() {
-                        _otherPerson = false;
-                        _contact = _contact?['id'] == c['id'] ? null : c;
-                      }),
+                      onSelected: (_) => _pickContact(_contact?['id'] == c['id'] ? null : c),
                     ),
                   ChoiceChip(
                     label: const Text('Başka biri'),
@@ -364,6 +436,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
                     onSelected: (_) => setState(() {
                       _contact = null;
                       _otherPerson = true;
+                      _email.clear();
                     }),
                   ),
                   ActionChip(avatar: const Icon(Icons.person_add_alt, size: 18), label: const Text('Personel ekle'), onPressed: _addContact),
@@ -384,6 +457,22 @@ class _DeliveryPageState extends State<DeliveryPage> {
               child: TextField(controller: _otherTitle, decoration: const InputDecoration(labelText: 'Unvan')),
             ),
           ],
+          if (_contact != null || _otherPerson)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: TextField(
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: 'Belge kopyasının gideceği e-posta',
+                  prefixIcon: const Icon(Icons.mail_outline),
+                  errorText: _emailInvalid ? 'Geçerli bir e-posta yazın' : null,
+                  helperText: 'Kayıttan sonra PDF belge bu adrese gönderilir. Boş bırakılırsa gönderilmez.',
+                  helperMaxLines: 2,
+                ),
+              ),
+            ),
           StepTitle(
             _isReturn ? '3. Geri alınan ürünler' : '3. Teslim edilen ürünler',
             trailing: _cart.lines.isEmpty ? null : Text('${_cart.lines.length} kalem · toplam ${qty(_cart.totalUnits)}'),
@@ -427,6 +516,49 @@ class _DeliveryPageState extends State<DeliveryPage> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Signature(controller: _signature, height: 180, backgroundColor: Colors.white),
+            ),
+          ),
+          StepTitle(
+            '5. Fotoğraf (isteğe bağlı)',
+            trailing: _photo == null
+                ? null
+                : TextButton(onPressed: () => setState(() => _photo = null), child: const Text('Kaldır')),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _photo == null
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _takePhoto(ImageSource.camera),
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: const Text('Fotoğraf çek'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _takePhoto(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: const Text('Galeriden'),
+                        ),
+                      ),
+                    ],
+                  )
+                : GestureDetector(
+                    onTap: () => _takePhoto(ImageSource.camera),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(_photo!, height: 200, width: double.infinity, fit: BoxFit.cover, semanticLabel: 'Belge fotoğrafı'),
+                    ),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Text(
+              _isReturn ? 'Ör. geri alınan ürünlerin ya da boşalan dolabın fotoğrafı.' : 'Ör. dolaba yerleştirilen ürünlerin fotoğrafı.',
+              style: TextStyle(color: theme.hintColor, fontSize: 12),
             ),
           ),
           Padding(
@@ -479,6 +611,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
               ),
               const SizedBox(height: 4),
               Text(d['_location'] ?? '', style: TextStyle(color: Theme.of(context).hintColor)),
+              const SizedBox(height: 16),
+              _emailStatus(context, d),
               const SizedBox(height: 24),
               FilledButton.icon(onPressed: _startNew, icon: const Icon(Icons.add), label: const Text('Yeni belge')),
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Ana ekrana dön')),
@@ -486,6 +620,33 @@ class _DeliveryPageState extends State<DeliveryPage> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Belge kopyasının e-posta durumu ve (yeniden) gönder düğmesi
+  Widget _emailStatus(BuildContext context, Map<String, dynamic> d) {
+    final scheme = Theme.of(context).colorScheme;
+    final (IconData icon, String text, Color color) = switch (d['email_status']) {
+      'sent' => (Icons.mark_email_read_outlined, 'Belge kopyası ${d['email_to']} adresine gönderildi', scheme.primary),
+      'failed' => (Icons.error_outline, 'E-posta gönderilemedi: ${d['email_error'] ?? ''}', scheme.error),
+      _ => (Icons.unsubscribe_outlined, 'Belge kopyası e-postayla gönderilmedi', Theme.of(context).hintColor),
+    };
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 6),
+            Flexible(child: Text(text, style: TextStyle(color: color), textAlign: TextAlign.center)),
+          ],
+        ),
+        TextButton.icon(
+          onPressed: _sendEmail,
+          icon: const Icon(Icons.forward_to_inbox_outlined, size: 18),
+          label: Text(d['email_status'] == 'sent' ? 'Başka adrese gönder' : 'E-postayla gönder'),
+        ),
+      ],
     );
   }
 }

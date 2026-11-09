@@ -21,10 +21,15 @@ class Delivery extends Model
 
     public const STATUS_CANCELLED = 'cancelled';
 
+    public const EMAIL_SENT = 'sent';
+
+    public const EMAIL_FAILED = 'failed';
+
     protected $fillable = [
         'number', 'type', 'status', 'hospital_id', 'location_id', 'vehicle_id', 'contact_id',
         'receiver_name', 'receiver_title', 'user_id', 'delivered_at', 'device_time',
         'latitude', 'longitude', 'location_accuracy', 'location_error', 'signature_path', 'photo_path', 'note', 'batch_uuid',
+        'email_to', 'email_status', 'emailed_at', 'email_error',
         'cancelled_at', 'cancelled_by', 'cancel_reason',
     ];
 
@@ -38,6 +43,7 @@ class Delivery extends Model
             'delivered_at' => 'datetime',
             'device_time' => 'datetime',
             'cancelled_at' => 'datetime',
+            'emailed_at' => 'datetime',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
         ];

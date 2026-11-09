@@ -22,6 +22,12 @@ php artisan serve          # http://localhost:8000/api/...
 
 `ADMIN_PASSWORD` boş bırakılırsa seed sırasında rastgele bir şifre üretilip ekrana yazılır.
 
+PHP'de `gd` eklentisi açık olmalı (php.ini: `extension=gd`): teslimat belgesinin PDF'indeki imza ve fotoğraf için.
+
+**E-posta:** teslimat belgesinin PDF kopyası hastane personeline e-postayla gider. Gerçek gönderim için `.env` içinde
+`MAIL_MAILER=smtp`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` girin;
+belgelerde görünen firma adı `COMPANY_NAME`. Varsayılan `MAIL_MAILER=log` e-postayı göndermez, `storage/logs/laravel.log` dosyasına yazar.
+
 Testler (SQLite bellek veritabanında çalışır, MySQL gerekmez): `php artisan test`
 
 **Örnek veri** (30 ürün, 10 hastane, 3 depocu, 3 saha personeli (mumessil1-3@medikal.test) ve son 3 haftanın hareketleri). Yalnızca deneme ortamında:
@@ -163,6 +169,8 @@ Lot verilmeyen çıkışlarda SKT'si en yakın lot önce kullanılır; SKT'si ge
 | GET | `/api/deliveries?hospital_id=&type=&from=&to=` | Belgeler (kendi / ekip / herkes, yetkiye göre) |
 | GET | `/api/deliveries/{id}` · `/{id}/signature` · `/{id}/photo` | Belge, imza ve fotoğraf |
 | POST | `/api/deliveries/{id}/cancel` | `{reason}` — ürünler geri taşınır; ürün yerinde değilse iptal edilemez |
+| GET | `/api/deliveries/{id}/pdf` | Belgenin PDF'i (imza ve fotoğrafla) |
+| POST | `/api/deliveries/{id}/email` | `{email?}` — PDF'i e-postayla (yeniden) gönderir; adres verilmezse kişinin kayıtlı adresine |
 
 ```json
 POST /api/deliveries
@@ -171,6 +179,7 @@ Idempotency-Key: 6c1e2f9a-...
   "type": "delivery",
   "hospital_id": 1, "location_id": 11, "vehicle_id": 2,
   "contact_id": 3,                          // ya da "receiver_name": "Nöbetçi hemşire"
+  "receiver_email": "hemsire@hastane.gov.tr", // isteğe bağlı; yoksa kişinin kayıtlı e-postası
   "items": [{ "stock_id": 57, "quantity": 2 }],
   "signature": "data:image/png;base64,...", // teslimde zorunlu
   "photo": "data:image/jpeg;base64,...",    // isteğe bağlı
@@ -180,6 +189,10 @@ Idempotency-Key: 6c1e2f9a-...
 ```
 
 Hastaneye düz transfer ya da stok girişi yapılamaz; konsinye yalnızca imzalı teslimat belgesiyle değişir.
+
+Kayıttan sonra belgenin PDF kopyası teslim alana (geri almada teslim edene) e-postayla gider. Gönderimin sonucu belgede
+tutulur (`email_status`: `sent` / `failed` / `null`, `email_to`, `emailed_at`, `email_error`). E-posta hatası kaydı geri almaz;
+belge panelden ya da mobilden yeniden gönderilebilir. Kayıtlı kişinin e-postası yoksa yazılan adres kişiye de kaydedilir.
 
 ### Hata yanıtları
 | Kod | Anlamı |

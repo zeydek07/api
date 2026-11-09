@@ -7,9 +7,33 @@
     @if (doc.status === 'completed' && auth.can('deliveries.cancel')) {
       <button class="btn btn-ghost text-danger" (click)="cancel()"><span class="icon">block</span> İptal et</button>
     }
-    <button class="btn btn-secondary" (click)="print()"><span class="icon">print</span> Yazdır / PDF</button>
+    @if (doc.status === 'completed') {
+      <button class="btn btn-secondary" (click)="sendEmail()"><span class="icon">forward_to_inbox</span> E-postayla gönder</button>
+    }
+    <button class="btn btn-secondary" (click)="downloadPdf()"><span class="icon">picture_as_pdf</span> PDF indir</button>
+    <button class="btn btn-secondary" (click)="print()"><span class="icon">print</span> Yazdır</button>
   }
 </div>
+
+@if (d(); as doc) {
+  <div class="no-print mx-auto mb-4 max-w-4xl">
+    @if (doc.email_status === 'sent') {
+      <p class="flex items-center gap-2 rounded-xl bg-ok-soft px-4 py-2.5 text-sm text-ok">
+        <span class="icon text-[18px]">mark_email_read</span>
+        Belge kopyası {{ doc.email_to }} adresine gönderildi · {{ doc.emailed_at | date: 'dd.MM.yyyy HH:mm' }}
+      </p>
+    } @else if (doc.email_status === 'failed') {
+      <p class="flex items-center gap-2 rounded-xl bg-danger-soft px-4 py-2.5 text-sm text-danger">
+        <span class="icon text-[18px]">error</span>
+        {{ doc.email_to }} adresine e-posta gönderilemedi ({{ doc.emailed_at | date: 'dd.MM.yyyy HH:mm' }}) · {{ doc.email_error }}
+      </p>
+    } @else {
+      <p class="flex items-center gap-2 rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-muted">
+        <span class="icon text-[18px]">unsubscribe</span> Belge kopyası henüz e-postayla gönderilmedi.
+      </p>
+    }
+  </div>
+}
 
 @if (notFound()) {
   <div class="card mx-auto max-w-lg px-6 py-12 text-center">

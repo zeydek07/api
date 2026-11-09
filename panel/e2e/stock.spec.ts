@@ -42,7 +42,10 @@ test.describe('Stok (yönetici)', () => {
 
   test('SKT filtresi yalnızca süresi yaklaşan lotları gösterir', async ({ page }) => {
     await page.goto('/stok');
+    // Filtrelenmiş liste gelmeden satırlar sayılmasın
+    const filtered = page.waitForResponse((r) => r.url().includes('/stocks?') && r.url().includes('expiry=warning'));
     await page.getByRole('button', { name: /SKT yaklaşan/ }).click();
+    await filtered;
     const rows = page.locator('tbody tr');
     await expect(rows.first()).toBeVisible();
     // Her satırda uyarı renginde SKT rozeti var

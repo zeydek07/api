@@ -8,6 +8,8 @@ use App\Models\HospitalContact;
 use App\Models\Stock;
 use App\Models\StockMovement;
 use App\Services\StockService;
+use App\Mail\DeliveryDocumentMail;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class DeliveryTest extends ApiTestCase
@@ -32,6 +34,7 @@ class DeliveryTest extends ApiTestCase
     {
         parent::setUp();
         Storage::fake('local');
+        Mail::fake();
 
         $this->manager = $this->userWithRole('yonetici');
         $this->rep = $this->userWithRole('personel', ['manager_id' => $this->manager->id]);
@@ -291,5 +294,114 @@ class DeliveryTest extends ApiTestCase
         $this->withToken($this->tokenFor($this->manager))
             ->postJson('/api/deliveries/'.Delivery::first()->id.'/cancel', ['reason' => 'Yanlış hastane'])
             ->assertOk();
+    }
+
+    private function jpeg(): string
+    {
+        $img = imagecreatetruecolor(1600, 900);
+        imagefill($img, 0, 0, imagecolorallocate($img, 30, 120, 110));
+        ob_start();
+        imagejpeg($img);
+
+        return 'data:image/jpeg;base64,'.base64_encode(ob_get_clean());
+    }
+
+    public function test_document_copy_is_emailed_to_the_contact_as_pdf(): void
+    {
+        $this->contact->update(['email' => 'ayse@kartal.test']);
+        $res = $this->withToken($this->tokenFor($this->rep))
+            ->postJson('/api/deliveries', $this->payload(['photo' => $this->jpeg()]))->assertCreated();
+
+        $res->assertJsonPath('delivery.email_status', 'sent')->assertJsonPath('delivery.email_to', 'ayse@kartal.test');
+        $d = Delivery::first();
+        Storage::disk('local')->assertExists($d->photo_path);
+
+        Mail::assertSent(DeliveryDocumentMail::class, function (DeliveryDocumentMail $m) use ($d) {
+            $att = $m->attachments()[0];
+            $this->assertSame([$d->number.'.pdf', 'application/pdf'], [$att->as, $att->mime]);
+            $this->assertStringStartsWith('%PDF', $att->attachWith(fn () => null, fn ($data) => $data()));
+            $this->assertStringContainsString($d->number, $m->envelope()->subject);
+            $this->assertStringContainsString('Kartal Devlet Hastanesi', $m->envelope()->subject);
+
+            return $m->hasTo('ayse@kartal.test');
+        });
+        $this->assertNotNull($d->emailed_at);
+    }
+
+    public function test_typed_email_is_used_and_saved_on_contact_without_email(): void
+    {
+        $this->withToken($this->tokenFor($this->rep))
+            ->postJson('/api/deliveries', $this->payload(['receiver_email' => ' Ayse@Kartal.test ']))
+            ->assertCreated()->assertJsonPath('delivery.email_to', 'ayse@kartal.test');
+
+        Mail::assertSent(DeliveryDocumentMail::class, fn ($m) => $m->hasTo('ayse@kartal.test'));
+        $this->assertSame('ayse@kartal.test', $this->contact->fresh()->email);
+
+        // Geçersiz adres kaydı engeller
+        $this->withToken($this->tokenFor($this->rep))
+            ->postJson('/api/deliveries', $this->payload(['receiver_email' => 'yanlis-adres']))
+            ->assertStatus(422)->assertJsonValidationErrors('receiver_email');
+    }
+
+    public function test_no_email_means_nothing_is_sent(): void
+    {
+        $this->withToken($this->tokenFor($this->rep))->postJson('/api/deliveries', $this->payload())
+            ->assertCreated()->assertJsonPath('delivery.email_status', null);
+        Mail::assertNothingSent();
+    }
+
+    public function test_mail_failure_does_not_lose_the_delivery(): void
+    {
+        $this->contact->update(['email' => 'ayse@kartal.test']);
+        Mail::shouldReceive('to')->andThrow(new \RuntimeException('SMTP sunucusuna bağlanılamadı'));
+
+        $this->withToken($this->tokenFor($this->rep))->postJson('/api/deliveries', $this->payload())
+            ->assertCreated()
+            ->assertJsonPath('delivery.email_status', 'failed')
+            ->assertJsonPath('delivery.email_error', 'SMTP sunucusuna bağlanılamadı');
+        $this->assertSame(1, Delivery::count());
+        $this->assertSame(2.0, (float) Stock::find($this->stockId('YAKIN'))->quantity);
+    }
+
+    public function test_pdf_download_and_resend(): void
+    {
+        $token = $this->tokenFor($this->rep);
+        $this->withToken($token)->postJson('/api/deliveries', $this->payload(['photo' => $this->jpeg(), 'note' => 'Dolap A üst raf']))->assertCreated();
+        $d = Delivery::first();
+
+        $pdf = $this->withToken($token)->get("/api/deliveries/{$d->id}/pdf")->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        // Adres yoksa yazılması istenir
+        $this->withToken($token)->postJson("/api/deliveries/{$d->id}/email")->assertStatus(422)->assertJsonValidationErrors('email');
+        $this->withToken($token)->postJson("/api/deliveries/{$d->id}/email", ['email' => 'satinalma@kartal.test'])
+            ->assertOk()->assertJsonPath('delivery.email_status', 'sent');
+        Mail::assertSent(DeliveryDocumentMail::class, fn ($m) => $m->hasTo('satinalma@kartal.test'));
+
+        // Başka personel göremez, gönderemez
+        $other = $this->userWithRole('personel');
+        $this->withToken($this->tokenFor($other))->get("/api/deliveries/{$d->id}/pdf")->assertNotFound();
+        $this->withToken($this->tokenFor($other))->postJson("/api/deliveries/{$d->id}/email", ['email' => 'x@y.test'])->assertNotFound();
+
+        // İptal edilen belge PDF'te görünür ama gönderilmez
+        $this->withToken($this->tokenFor($this->manager))->postJson("/api/deliveries/{$d->id}/cancel", ['reason' => 'Yanlış lokasyon'])->assertOk();
+        $this->withToken($token)->get("/api/deliveries/{$d->id}/pdf")->assertOk();
+        $this->withToken($token)->postJson("/api/deliveries/{$d->id}/email", ['email' => 'satinalma@kartal.test'])->assertStatus(422);
+    }
+
+    public function test_return_document_is_also_emailed(): void
+    {
+        $this->contact->update(['email' => 'ayse@kartal.test']);
+        $token = $this->tokenFor($this->rep);
+        $this->withToken($token)->postJson('/api/deliveries', $this->payload())->assertCreated();
+        $there = Stock::where('warehouse_id', $this->location->id)->value('id');
+
+        $res = $this->withToken($token)->postJson('/api/deliveries', $this->payload([
+            'type' => 'return', 'signature' => null, 'photo' => $this->jpeg(),
+            'items' => [['stock_id' => $there, 'quantity' => 1]],
+        ]))->assertCreated();
+        $this->assertStringStartsWith('GA-', $res->json('delivery.number'));
+        Mail::assertSent(DeliveryDocumentMail::class, 2);
+        Mail::assertSent(DeliveryDocumentMail::class, fn ($m) => str_starts_with($m->envelope()->subject, 'Geri alma belgesi'));
     }
 }

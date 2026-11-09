@@ -81,6 +81,8 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::get('deliveries/{id}', [DeliveryController::class, 'show'])->whereNumber('id')->middleware($seeDeliveries);
     Route::get('deliveries/{id}/{kind}', [DeliveryController::class, 'proof'])->whereNumber('id')->whereIn('kind', ['signature', 'photo'])->middleware($seeDeliveries);
     Route::post('deliveries', [DeliveryController::class, 'store'])->middleware(['permission:deliveries.create', 'throttle:usage']);
+    Route::get('deliveries/{id}/pdf', [DeliveryController::class, 'pdf'])->whereNumber('id')->middleware($seeDeliveries);
+    Route::post('deliveries/{id}/email', [DeliveryController::class, 'email'])->whereNumber('id')->middleware([$seeDeliveries, 'throttle:usage']);
     Route::post('deliveries/{id}/cancel', [DeliveryController::class, 'cancel'])->whereNumber('id')->middleware('permission:deliveries.cancel');
 
     // Hastane yapısı: konsinye lokasyonları, hastane personeli, konsinye stok

@@ -56,12 +56,17 @@ test.describe.serial('Konsinye teslimat (mümessil)', () => {
     // 5. İmza
     await sign(page);
     await page.locator('#d-note').fill('E2E: karekodla teslimat');
+    // Belge kopyası hastane personeline e-postayla gider
+    await page.locator('#d-email').fill('yanlis-adres');
+    await expect(page.getByText('E-posta adresi geçersiz')).toBeVisible();
+    await page.locator('#d-email').fill('hemsire@kartal.test');
 
     const submit = page.getByRole('button', { name: /Teslimatı tamamla/ });
     await expect(submit).toBeEnabled();
     await submit.click();
 
     await expect(page.getByRole('heading', { name: 'Teslimat kaydedildi' })).toBeVisible();
+    await expect(page.getByText('Belge kopyası hemsire@kartal.test adresine gönderildi')).toBeVisible();
     deliveryNumber = (await page.locator('p.font-mono').first().textContent())!.trim();
     expect(deliveryNumber).toMatch(/^TS-\d{4}-\d{6}$/);
 
@@ -79,6 +84,16 @@ test.describe.serial('Konsinye teslimat (mümessil)', () => {
     // İşlem anındaki konum belgede
     await expect(page.getByRole('link', { name: /İşlem konumunu haritada aç/ })).toHaveAttribute('href', /40\.9067.*29\.1932/);
     await expect(page.locator('article')).toContainText('Konum doğruluğu ±15 m');
+    // E-posta durumu ve sunucudan PDF
+    await expect(page.getByText(/Belge kopyası hemsire@kartal\.test adresine gönderildi ·/)).toBeVisible();
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: /PDF indir/ }).click();
+    expect((await download).suggestedFilename()).toBe(`${deliveryNumber}.pdf`);
+    // Başka adrese yeniden gönderme
+    await page.getByRole('button', { name: /E-postayla gönder/ }).click();
+    await page.locator('#send-email').fill('satinalma@kartal.test');
+    await page.locator('app-modal').getByRole('button', { name: /Gönder/ }).click();
+    await expect(page.getByText(/satinalma@kartal\.test adresine gönderildi ·/)).toBeVisible();
     // Mümessil iptal edemez
     await expect(page.getByRole('button', { name: /İptal et/ })).toHaveCount(0);
 
