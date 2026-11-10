@@ -62,6 +62,7 @@ test.describe.serial('Vaka döngüsü: planla, kaydet, onayla, faturala (yöneti
     await dialog.getByRole('button', { name: 'Vazgeç' }).first().click();
 
     await dialog.locator('#pc-procedure').fill('E2E Total diz protezi');
+    await dialog.locator('#pc-patient').fill('Fatma Yıldız');
     await dialog.locator('#pc-protocol').fill('E2E-PRT-1');
     await dialog.locator('#pc-note').fill('E2E planı');
     await dialog.getByRole('button', { name: 'Planla' }).click();
@@ -76,6 +77,7 @@ test.describe.serial('Vaka döngüsü: planla, kaydet, onayla, faturala (yöneti
     await expect(article).toContainText(HOSPITAL);
     await expect(article).toContainText('Prof. Dr. E2E Cerrah');
     await expect(article).toContainText('E2E Total diz protezi');
+    await expect(article).toContainText('Fatma Yıldız');
     await expect(article).toContainText('Ürünler mobil uygulamada ameliyat sırasında kaydedilir');
     // Planlanmış vakada onay ve PDF yok; plan düzenlenebilir, iptal edilebilir
     await expect(page.getByRole('button', { name: 'Onayla' })).toHaveCount(0);
@@ -88,6 +90,7 @@ test.describe.serial('Vaka döngüsü: planla, kaydet, onayla, faturala (yöneti
     await page.getByRole('tab', { name: 'Planlandı' }).click();
     await page.getByRole('textbox', { name: 'Ara' }).fill(caseNumber);
     await expect(page.locator('tbody tr', { hasText: caseNumber })).toContainText('E2E Total diz protezi');
+    await expect(page.locator('tbody tr', { hasText: caseNumber })).toContainText('Fatma Yıldız · Protokol E2E-PRT-1');
 
     expect(errors).toEqual([]);
   });

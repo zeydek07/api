@@ -39,7 +39,7 @@ class BillingController extends Controller
                 ->orWhereHas('surgeryCase', fn ($c) => $c->where('number', 'like', '%'.$request->q.'%'))))
             ->with([
                 'product:id,name,code,gtin,unit',
-                'surgeryCase:id,number,hospital_id,doctor_id,user_id,performed_at,procedure,protocol_no',
+                'surgeryCase:id,number,hospital_id,doctor_id,user_id,performed_at,procedure,protocol_no,patient_name',
                 'surgeryCase.hospital:id,name',
                 'surgeryCase.doctor:id,name,title',
                 'surgeryCase.user:id,name',

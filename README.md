@@ -203,9 +203,9 @@ Vaka satırı durumları: `used` (kullanıldı) ve `opened` (açıldı) stoktan 
 | Yöntem | Adres | Açıklama |
 |---|---|---|
 | GET | `/api/cases?scope=today\|upcoming\|past\|overdue&status=&billing=pending\|invoiced&hospital_id=&q=&mine=1` | Vakalar (kendi / ekip / herkes, yetkiye göre). `overdue`: saati geçmiş, ürünleri girilmemiş. `mine=1`: yalnızca sorumlusu olduğum vakalar |
-| POST | `/api/cases` | Planla: `{hospital_id, scheduled_at, location_id?, doctor_id?, procedure?, protocol_no?, note?, user_id?}`. Saat dilimsiz saat Türkiye saatidir. Başka personel adına planlamak `cases.approve` ister |
+| POST | `/api/cases` | Planla: `{hospital_id, scheduled_at, location_id?, doctor_id?, procedure?, protocol_no?, patient_name?, note?, user_id?}`. Saat dilimsiz saat Türkiye saatidir. Başka personel adına planlamak `cases.approve` ister |
 | PUT | `/api/cases/{id}` | Planı düzenle (yalnızca planlıyken) |
-| POST | `/api/cases/{id}/record` | Ürün kaydı: `items[{stock_id, quantity, status}]`, imza (zorunlu), `contact_id` ya da `signer_name`, `receiver_email?`, `photos?[{data, kind}]` (en fazla 10, toplam 5 MB), konum. `Idempotency-Key` desteklenir. Tutanağın PDF kopyası e-postayla gider |
+| POST | `/api/cases/{id}/record` | Ürün kaydı: `items[{stock_id, quantity, status}]`, imza (zorunlu), `contact_id` ya da `signer_name`, `receiver_email?`, `protocol_no?`, `patient_name?`, `photos?[{data, kind}]` (en fazla 10, toplam 5 MB), konum. `Idempotency-Key` desteklenir. Tutanağın PDF kopyası e-postayla gider |
 | POST | `/api/cases/unplanned` | Plansız (acil) vaka: plan olmadan `hospital_id, location_id?, doctor_id?, procedure?` + kayıt alanları tek istekte. Vaka `is_unplanned` işaretlenir |
 | GET / POST | `/api/cases/transfer-targets` · `/api/cases/{id}/transfer` | Planlı vakayı başka personele devret `{user_id, note?}`. Sahibi yalnızca ekibine, `cases.approve` herkese devreder |
 | POST / GET | `/api/cases/{id}/photos` · `/api/cases/{id}/photos/{photoId}` | Kaydedilmiş vakaya sonradan fotoğraf ekle / fotoğrafı indir. Türler: `usage_form, product_label, patient_label, delivery_form, shelf, other` |

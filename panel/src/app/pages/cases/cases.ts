@@ -93,8 +93,8 @@ import { PlanCaseDialog } from './case-dialogs';
                   @if (c.is_unplanned) {
                     <span class="badge badge-warn ms-1.5">Plansız</span>
                   }
-                  @if (c.protocol_no) {
-                    <div class="cell-sub">Protokol {{ c.protocol_no }}</div>
+                  @if (c.patient_name || c.protocol_no) {
+                    <div class="cell-sub">{{ c.patient_name }}{{ c.patient_name && c.protocol_no ? ' · ' : '' }}{{ c.protocol_no ? 'Protokol ' + c.protocol_no : '' }}</div>
                   }
                 </td>
                 <td class="whitespace-nowrap">

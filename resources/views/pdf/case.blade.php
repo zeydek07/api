@@ -77,6 +77,7 @@
             <div class="label">Ameliyat</div>
             <strong>{{ $c->procedure ?: '—' }}</strong>
             <div>Doktor: {{ $c->doctor?->display_name ?? '—' }}@if ($c->doctor?->branch) <span class="muted">({{ $c->doctor->branch }})</span>@endif</div>
+            <div>Hasta: {{ $c->patient_name ?: '—' }}</div>
             <div>Hasta protokol no: <span class="mono">{{ $c->protocol_no ?: '—' }}</span></div>
         </td>
     </tr>

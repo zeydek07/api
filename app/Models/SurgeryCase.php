@@ -27,7 +27,7 @@ class SurgeryCase extends Model
 
     protected $fillable = [
         'number', 'status', 'is_unplanned', 'hospital_id', 'location_id', 'doctor_id', 'user_id', 'created_by',
-        'scheduled_at', 'procedure', 'protocol_no', 'note',
+        'scheduled_at', 'procedure', 'protocol_no', 'patient_name', 'note',
         'performed_at', 'recorded_by', 'device_time', 'contact_id', 'signer_name', 'signer_title',
         'signature_path', 'photo_path', 'latitude', 'longitude', 'location_accuracy', 'location_error', 'batch_uuid',
         'email_to', 'email_status', 'emailed_at', 'email_error',

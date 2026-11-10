@@ -33,6 +33,7 @@ class _CasePlanPageState extends State<CasePlanPage> {
   late TimeOfDay _time;
   final _procedure = TextEditingController();
   final _protocol = TextEditingController();
+  final _patient = TextEditingController();
   final _note = TextEditingController();
   bool _saving = false;
 
@@ -47,6 +48,7 @@ class _CasePlanPageState extends State<CasePlanPage> {
     _time = TimeOfDay(hour: start.hour, minute: e == null ? 0 : start.minute);
     _procedure.text = e?.procedure ?? '';
     _protocol.text = e?.protocolNo ?? '';
+    _patient.text = e?.patientName ?? '';
     _note.text = e?.json['note'] ?? '';
 
     _api.get('hospitals', {'is_active': 1, 'per_page': 100}).then((r) async {
@@ -190,6 +192,7 @@ class _CasePlanPageState extends State<CasePlanPage> {
       'scheduled_at': trWire(_when),
       'procedure': _procedure.text.trim().isEmpty ? null : _procedure.text.trim(),
       'protocol_no': _protocol.text.trim().isEmpty ? null : _protocol.text.trim(),
+      'patient_name': _patient.text.trim().isEmpty ? null : _patient.text.trim(),
       'note': _note.text.trim().isEmpty ? null : _note.text.trim(),
     };
     try {
@@ -323,10 +326,23 @@ class _CasePlanPageState extends State<CasePlanPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: TextField(
+                controller: _patient,
+                maxLength: 120,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Hasta adı soyadı (isteğe bağlı)',
+                  prefixIcon: Icon(Icons.person_outline),
+                  counterText: '',
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: TextField(
                 controller: _protocol,
                 decoration: const InputDecoration(
                   labelText: 'Hasta protokol no (isteğe bağlı)',
-                  helperText: 'Hasta adı yazılmaz. Ameliyatta da girilebilir.',
+                  helperText: 'Hasta bilgileri ameliyatta da girilebilir.',
                   prefixIcon: Icon(Icons.badge_outlined),
                 ),
               ),

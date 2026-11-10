@@ -408,6 +408,7 @@ export interface SurgeryCase {
   performed_at: string | null;
   procedure: string | null;
   protocol_no: string | null;
+  patient_name: string | null;
   note: string | null;
   is_overdue: boolean;
   has_signature: boolean;
@@ -463,6 +464,7 @@ export interface BillingItem {
     performed_at: string | null;
     procedure: string | null;
     protocol_no: string | null;
+    patient_name: string | null;
     hospital?: { id: number; name: string };
     doctor?: { id: number; name: string; title: string | null; display_name: string } | null;
     user?: { id: number; name: string };

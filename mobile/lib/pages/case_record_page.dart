@@ -52,6 +52,7 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
   final List<_Line> _lines = [];
 
   final _protocol = TextEditingController();
+  final _patient = TextEditingController();
   final _note = TextEditingController();
   final _email = TextEditingController();
   final _otherName = TextEditingController();
@@ -98,6 +99,7 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
         setState(() {
           _case = c;
           _protocol.text = c.protocolNo ?? '';
+          _patient.text = c.patientName ?? '';
         });
         if (!c.isPlanned) {
           setState(() => _loadError = 'Bu vakanın ürünleri zaten kaydedilmiş.');
@@ -228,6 +230,7 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
             'procedure': u.procedure,
           },
           'protocol_no': _protocol.text.trim().isEmpty ? null : _protocol.text.trim(),
+          'patient_name': _patient.text.trim().isEmpty ? null : _patient.text.trim(),
           'note': _note.text.trim().isEmpty ? null : _note.text.trim(),
           'contact_id': _otherPerson ? null : _contact?['id'],
           'signer_name': _otherPerson ? _otherName.text.trim() : null,
@@ -334,12 +337,26 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
                       ),
 
                     // 2. Protokol
-                    const StepTitle('2. Hasta protokol no'),
+                    const StepTitle('2. Hasta bilgisi'),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: TextField(
+                        controller: _patient,
+                        maxLength: 120,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.person_outline),
+                          labelText: 'Hasta adı soyadı',
+                          hintText: 'İsteğe bağlı',
+                          counterText: '',
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: TextField(
                         controller: _protocol,
-                        decoration: const InputDecoration(prefixIcon: Icon(Icons.badge_outlined), hintText: 'İsteğe bağlı · hasta adı yazılmaz'),
+                        decoration: const InputDecoration(prefixIcon: Icon(Icons.badge_outlined), labelText: 'Protokol no', hintText: 'İsteğe bağlı'),
                       ),
                     ),
 

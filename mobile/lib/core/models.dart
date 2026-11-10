@@ -144,6 +144,7 @@ class SurgeryCase {
   String? get doctorName => doctor == null ? null : (doctor!['display_name'] ?? doctor!['name']);
   String? get procedure => json['procedure'];
   String? get protocolNo => json['protocol_no'];
+  String? get patientName => json['patient_name'];
   bool get isOverdue => json['is_overdue'] == true;
   bool get isPlanned => status == 'planned';
 

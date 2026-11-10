@@ -137,6 +137,7 @@ import { CancelCaseDialog, EmailCaseDialog, PlanCaseDialog, TransferCaseDialog }
           <div>
             <h2 class="doc-label">Ameliyat</h2>
             <div class="font-semibold">{{ doc.procedure || '—' }}</div>
+            <div class="text-sm"><span class="text-muted">Hasta:</span> {{ doc.patient_name || '—' }}</div>
             <div class="text-sm"><span class="text-muted">Protokol no:</span> {{ doc.protocol_no || '—' }}</div>
           </div>
           <div>

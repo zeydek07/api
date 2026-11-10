@@ -101,6 +101,10 @@ export interface PlanCaseData {
           <input id="pc-procedure" class="input" [(ngModel)]="form.procedure" maxlength="200" placeholder="ör. Total diz protezi" />
         </div>
         <div>
+          <label class="label" for="pc-patient">Hasta adı soyadı</label>
+          <input id="pc-patient" class="input" [(ngModel)]="form.patient_name" maxlength="120" />
+        </div>
+        <div>
           <label class="label" for="pc-protocol">Protokol no</label>
           <input id="pc-protocol" class="input" [(ngModel)]="form.protocol_no" maxlength="60" />
         </div>
@@ -192,6 +196,7 @@ export class PlanCaseDialog {
         time: formatDate(when, 'HH:mm', 'en-US'),
         procedure: c.procedure ?? '',
         protocol_no: c.protocol_no ?? '',
+        patient_name: c.patient_name ?? '',
         note: c.note ?? '',
       };
     }
@@ -205,6 +210,7 @@ export class PlanCaseDialog {
       time: formatDate(next, 'HH:mm', 'en-US'),
       procedure: '',
       protocol_no: '',
+      patient_name: '',
       note: '',
     };
   }
@@ -279,6 +285,7 @@ export class PlanCaseDialog {
       doctor_id: this.form.doctor_id,
       procedure: this.form.procedure.trim() || null,
       protocol_no: this.form.protocol_no.trim() || null,
+      patient_name: this.form.patient_name.trim() || null,
       note: this.form.note.trim() || null,
     };
     if (this.canAssign() && this.form.user_id) body['user_id'] = this.form.user_id;

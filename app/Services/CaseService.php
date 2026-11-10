@@ -54,6 +54,7 @@ class CaseService
                 'scheduled_at' => self::parseTime($data['scheduled_at']),
                 'procedure' => $data['procedure'] ?? null,
                 'protocol_no' => $data['protocol_no'] ?? null,
+                'patient_name' => $data['patient_name'] ?? null,
                 'note' => $data['note'] ?? null,
             ]);
             $case->update(['number' => sprintf('VK-%s-%06d', now()->format('Y'), $case->id)]);
@@ -86,7 +87,7 @@ class CaseService
             $data['scheduled_at'] = self::parseTime($data['scheduled_at']);
         }
         $case->fill(collect($data)->only([
-            'hospital_id', 'location_id', 'doctor_id', 'user_id', 'scheduled_at', 'procedure', 'protocol_no', 'note',
+            'hospital_id', 'location_id', 'doctor_id', 'user_id', 'scheduled_at', 'procedure', 'protocol_no', 'patient_name', 'note',
         ])->all());
         $changed = array_keys($case->getDirty());
         $case->save();
@@ -250,6 +251,7 @@ class CaseService
             'recorded_by' => $user->id,
             'device_time' => $data['device_time'] ?? null,
             'protocol_no' => $data['protocol_no'] ?? $case->protocol_no,
+            'patient_name' => $data['patient_name'] ?? $case->patient_name,
             'note' => $data['note'] ?? $case->note,
             'contact_id' => $contactId,
             'signer_name' => $signerName,

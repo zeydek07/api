@@ -228,6 +228,9 @@ export class InvoiceDialog {
                       </td>
                       <td>
                         <a class="font-mono font-medium text-ink hover:underline" [routerLink]="['/vakalar', i.surgery_case?.id]">{{ i.surgery_case?.number }}</a>
+                        @if (i.surgery_case?.patient_name) {
+                          <div class="cell-sub">{{ i.surgery_case?.patient_name }}</div>
+                        }
                       </td>
                       <td class="whitespace-nowrap">{{ i.surgery_case?.performed_at | date: 'dd.MM.yyyy' }}</td>
                       <td>{{ i.surgery_case?.doctor?.display_name || '—' }}</td>

@@ -38,7 +38,7 @@ return new class extends Migration
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->dateTime('scheduled_at');
             $table->string('procedure', 200)->nullable();             // ameliyat türü
-            $table->string('protocol_no', 60)->nullable();            // hasta protokol no (hasta adı tutulmaz)
+            $table->string('protocol_no', 60)->nullable();            // hasta protokol no
             $table->string('note', 1000)->nullable();
 
             // Kayıt (ameliyat sonrası)

@@ -100,7 +100,15 @@ class CaseTest extends ApiTestCase
     public function test_rep_plans_a_case_and_manager_can_plan_for_rep(): void
     {
         $doctor = $this->hospital->doctors()->create(['name' => 'Ahmet Kaya', 'title' => 'Op. Dr.', 'branch' => 'Ortopedi']);
-        $case = $this->plan(['doctor_id' => $doctor->id, 'location_id' => $this->shelf->id]);
+        $case = $this->plan(['doctor_id' => $doctor->id, 'location_id' => $this->shelf->id, 'patient_name' => 'Fatma Yıldız']);
+        $this->assertSame('Fatma Yıldız', $case->patient_name);
+        // Hasta adıyla aranabilir; kayıtta değiştirilebilir
+        $repToken = $this->tokenFor($this->rep);
+        $this->withToken($repToken)->getJson('/api/cases?q=Yıldız')
+            ->assertOk()->assertJsonPath('data.0.id', $case->id);
+        $this->withToken($repToken)
+            ->postJson("/api/cases/{$case->id}/record", $this->recordPayload(['patient_name' => 'Fatma Yıldız Kaya']))
+            ->assertCreated()->assertJsonPath('case.patient_name', 'Fatma Yıldız Kaya');
 
         $this->assertMatchesRegularExpression('/^VK-\d{4}-\d{6}$/', $case->number);
         $this->assertSame([SurgeryCase::PLANNED, $this->rep->id], [$case->status, $case->user_id]);

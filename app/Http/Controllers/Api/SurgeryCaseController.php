@@ -67,6 +67,7 @@ class SurgeryCaseController extends Controller
             ->when($request->filled('q'), fn ($q) => $q->where(fn ($w) => $w
                 ->where('number', 'like', '%'.$request->q.'%')
                 ->orWhere('protocol_no', 'like', '%'.$request->q.'%')
+                ->orWhere('patient_name', 'like', '%'.$request->q.'%')
                 ->orWhere('procedure', 'like', '%'.$request->q.'%')))
             ->when($request->billing === 'pending', fn ($q) => $q->where('status', SurgeryCase::APPROVED)
                 ->whereHas('items', fn ($i) => $i->whereIn('status', SurgeryCaseItem::BILLABLE)->whereNull('invoice_number')))
@@ -266,6 +267,7 @@ class SurgeryCaseController extends Controller
     {
         return $request->validate([
             'protocol_no' => ['nullable', 'string', 'max:60'],
+            'patient_name' => ['nullable', 'string', 'max:120'],
             'note' => ['nullable', 'string', 'max:1000'],
             'contact_id' => ['nullable', 'integer'],
             'signer_name' => ['nullable', 'string', 'max:255'],
@@ -304,6 +306,7 @@ class SurgeryCaseController extends Controller
             'scheduled_at' => [$req, 'date'],
             'procedure' => ['nullable', 'string', 'max:200'],
             'protocol_no' => ['nullable', 'string', 'max:60'],
+            'patient_name' => ['nullable', 'string', 'max:120'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
     }
