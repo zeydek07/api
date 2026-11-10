@@ -345,7 +345,7 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
                         maxLength: 120,
                         textCapitalization: TextCapitalization.words,
                         decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.person_outline),
+                          prefixIcon: Icon(Icons.personal_injury_outlined),
                           labelText: 'Hasta adı soyadı',
                           hintText: 'İsteğe bağlı',
                           counterText: '',

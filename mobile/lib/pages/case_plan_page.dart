@@ -331,7 +331,7 @@ class _CasePlanPageState extends State<CasePlanPage> {
                 textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                   labelText: 'Hasta adı soyadı (isteğe bağlı)',
-                  prefixIcon: Icon(Icons.person_outline),
+                  prefixIcon: Icon(Icons.personal_injury_outlined),
                   counterText: '',
                 ),
               ),

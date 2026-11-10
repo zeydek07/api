@@ -307,7 +307,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         info(Icons.place_outlined, 'Bölüm', c.locationPath),
         info(Icons.person_outline, 'Doktor', c.doctorName),
         info(Icons.healing_outlined, 'Ameliyat', c.procedure),
-        info(Icons.person_outline, 'Hasta', c.patientName),
+        info(Icons.personal_injury_outlined, 'Hasta adı soyadı', c.patientName ?? 'Girilmedi'),
         info(Icons.badge_outlined, 'Hasta protokol no', c.protocolNo),
         info(Icons.notes, 'Not', j['note']),
         if (c.status == 'cancelled')
