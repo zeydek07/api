@@ -4,13 +4,16 @@ import '../core/api.dart';
 import '../core/models.dart';
 import '../ui/common.dart';
 import 'case_detail_page.dart';
+import 'case_record_page.dart';
 
 /// Vaka planla / planı düzenle: hastane, bölüm, doktor, tarih-saat, ameliyat türü.
+/// [emergency]: plansız (acil) vaka — tarih sorulmaz, seçimden sonra doğrudan ürün kaydına geçilir.
 class CasePlanPage extends StatefulWidget {
-  const CasePlanPage({super.key, this.existing});
+  const CasePlanPage({super.key, this.existing, this.emergency = false});
 
   /// Düzenlenecek planlı vaka (yoksa yeni)
   final SurgeryCase? existing;
+  final bool emergency;
 
   @override
   State<CasePlanPage> createState() => _CasePlanPageState();
@@ -162,6 +165,22 @@ class _CasePlanPageState extends State<CasePlanPage> {
 
   DateTime get _when => DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute);
 
+  /// Acil vaka: seçilenlerle ürün kaydına geç (vaka kayıtla birlikte açılır).
+  /// Kayıt bitince bu ekran da kapanır; çağıran liste ancak o zaman yenilenir.
+  Future<void> _continueEmergency() async {
+    final done = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      builder: (_) => CaseRecordPage(
+        unplanned: UnplannedCase(
+          hospital: _hospital!,
+          location: _location,
+          doctor: _doctor,
+          procedure: _procedure.text.trim().isEmpty ? null : _procedure.text.trim(),
+        ),
+      ),
+    ));
+    if (done == true && mounted) Navigator.pop(context, true);
+  }
+
   Future<void> _save() async {
     setState(() => _saving = true);
     final body = {
@@ -193,10 +212,19 @@ class _CasePlanPageState extends State<CasePlanPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(_editing ? 'Planı düzenle' : 'Vaka planla')),
+      appBar: AppBar(title: Text(widget.emergency ? 'Acil vaka kaydet' : _editing ? 'Planı düzenle' : 'Vaka planla')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 16),
         children: [
+          if (widget.emergency)
+            Card(
+              color: Colors.orange.shade50,
+              child: ListTile(
+                leading: Icon(Icons.bolt, color: Colors.orange.shade800),
+                title: const Text('Plan gerekmez'),
+                subtitle: const Text('Hastaneyi seçin, ardından kullanılan ürünleri okutup imza alın. Vaka "Plansız" olarak kaydedilir.'),
+              ),
+            ),
           const StepTitle('Nerede?'),
           PickerField<Map<String, dynamic>>(
             label: 'Hastane *',
@@ -239,32 +267,34 @@ class _CasePlanPageState extends State<CasePlanPage> {
               itemSubtitle: (d) => d['branch'],
               onChanged: (d) => setState(() => _doctor = d),
             ),
-          const StepTitle('Ne zaman?'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                    onPressed: _pickDate,
-                    icon: const Icon(Icons.event),
-                    label: Text(dayLabel(_date)),
+          if (!widget.emergency) ...[
+            const StepTitle('Ne zaman?'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                      onPressed: _pickDate,
+                      icon: const Icon(Icons.event),
+                      label: Text(dayLabel(_date)),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 120,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                    onPressed: _pickTime,
-                    icon: const Icon(Icons.schedule),
-                    label: Text('${two(_time.hour)}:${two(_time.minute)}'),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 120,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                      onPressed: _pickTime,
+                      icon: const Icon(Icons.schedule),
+                      label: Text('${two(_time.hour)}:${two(_time.minute)}'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
           const StepTitle('Ameliyat'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -289,28 +319,30 @@ class _CasePlanPageState extends State<CasePlanPage> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: TextField(
-              controller: _protocol,
-              decoration: const InputDecoration(
-                labelText: 'Hasta protokol no (isteğe bağlı)',
-                helperText: 'Hasta adı yazılmaz. Ameliyatta da girilebilir.',
-                prefixIcon: Icon(Icons.badge_outlined),
+          if (!widget.emergency) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: TextField(
+                controller: _protocol,
+                decoration: const InputDecoration(
+                  labelText: 'Hasta protokol no (isteğe bağlı)',
+                  helperText: 'Hasta adı yazılmaz. Ameliyatta da girilebilir.',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: TextField(controller: _note, maxLines: 2, decoration: const InputDecoration(labelText: 'Not (isteğe bağlı)')),
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: TextField(controller: _note, maxLines: 2, decoration: const InputDecoration(labelText: 'Not (isteğe bağlı)')),
+            ),
+          ],
         ],
       ),
       bottomNavigationBar: SubmitBar(
-        label: _editing ? 'Değişiklikleri kaydet' : 'Vakayı planla',
+        label: widget.emergency ? 'Devam: ürünleri okut' : _editing ? 'Değişiklikleri kaydet' : 'Vakayı planla',
         saving: _saving,
         missing: _hospital == null ? 'Hastane seçin' : null,
-        onPressed: _save,
+        onPressed: widget.emergency ? _continueEmergency : _save,
       ),
     );
   }

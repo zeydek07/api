@@ -207,6 +207,29 @@ export interface HospitalContact {
   is_active: boolean;
 }
 
+/** Belgeye eklenen kanıt fotoğrafı (dosya /photos/{id} ile token'lı alınır) */
+export interface ProofPhoto {
+  id: number;
+  kind: string;
+  label: string;
+  bytes: number;
+  created_by: number | null;
+  created_at: string;
+  creator?: { id: number; name: string } | null;
+}
+
+export type CaseEventType = 'planned' | 'updated' | 'recorded' | 'unplanned' | 'approved' | 'cancelled' | 'transferred' | 'photo_added';
+
+/** Vaka geçmişi satırı (etiketi sunucu Türkçe üretir) */
+export interface CaseEvent {
+  id: number;
+  type: CaseEventType;
+  label: string;
+  data: { from?: string; to?: string; note?: string | null; reason?: string | null; count?: number } | null;
+  created_at: string;
+  user?: { id: number; name: string } | null;
+}
+
 export type DeliveryType = 'delivery' | 'return';
 
 export interface Delivery {
@@ -230,7 +253,7 @@ export interface Delivery {
   location_status: 'ok' | 'missing';
   note: string | null;
   has_signature: boolean;
-  has_photo: boolean;
+  photos?: ProofPhoto[];
   email_to?: string | null;
   /** sent | failed | null (gönderilmedi) */
   email_status?: 'sent' | 'failed' | null;
@@ -388,7 +411,9 @@ export interface SurgeryCase {
   note: string | null;
   is_overdue: boolean;
   has_signature: boolean;
-  has_photo: boolean;
+  is_unplanned: boolean;
+  photos?: ProofPhoto[];
+  events?: CaseEvent[];
   email_status: 'sent' | 'failed' | null;
   email_to: string | null;
   emailed_at?: string | null;

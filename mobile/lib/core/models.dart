@@ -146,7 +146,14 @@ class SurgeryCase {
   String? get protocolNo => json['protocol_no'];
   bool get isOverdue => json['is_overdue'] == true;
   bool get isPlanned => status == 'planned';
+
+  /// Plan yapılmadan kaydedilen (acil) vaka
+  bool get isUnplanned => json['is_unplanned'] == true;
+  int? get userId => json['user_id'];
+  String? get ownerName => (json['user'] as Map?)?['name'];
   List<Map<String, dynamic>> get items => [for (final i in (json['items'] as List? ?? [])) Map<String, dynamic>.from(i)];
+  List<Map<String, dynamic>> get photos => [for (final i in (json['photos'] as List? ?? [])) Map<String, dynamic>.from(i)];
+  List<Map<String, dynamic>> get events => [for (final i in (json['events'] as List? ?? [])) Map<String, dynamic>.from(i)];
 
   static const labels = {'planned': 'Planlandı', 'recorded': 'Onay bekliyor', 'approved': 'Onaylandı', 'cancelled': 'İptal'};
 

@@ -186,14 +186,10 @@
         }
         <div class="mt-1 text-center text-xs text-muted">{{ doc.receiver_name }}</div>
       </div>
-      @if (doc.has_photo) {
-        <div>
-          <h2 class="doc-label">Fotoğraf</h2>
-          @if (photoUrl(); as p) {
-            <img [src]="p" alt="Teslimat fotoğrafı" class="h-36 w-full rounded-xl border border-line object-cover" />
-          }
-        </div>
-      }
+    </section>
+
+    <section class="mt-6">
+      <app-photo-gallery [photos]="doc.photos ?? []" [base]="'/deliveries/' + doc.id" [canAdd]="doc.status === 'completed'" (changed)="reload()" />
     </section>
 
     @if (doc.type === 'delivery') {

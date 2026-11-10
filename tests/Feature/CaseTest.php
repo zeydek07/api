@@ -309,4 +309,136 @@ class CaseTest extends ApiTestCase
         $this->withToken($this->tokenFor($this->manager))->putJson("/api/hospitals/{$this->hospital->id}/doctors/{$id}", ['branch' => 'Travmatoloji'])
             ->assertOk()->assertJsonPath('branch', 'Travmatoloji');
     }
+
+    public function test_unplanned_case_is_recorded_in_one_step_and_is_idempotent(): void
+    {
+        $token = $this->tokenFor($this->rep);
+        $payload = [
+            'hospital_id' => $this->hospital->id,
+            'procedure' => 'Kırık fiksasyonu',
+            ...$this->recordPayload([
+                'photos' => [
+                    ['data' => self::PNG, 'kind' => 'usage_form'],
+                    ['data' => self::PNG, 'kind' => 'product_label'],
+                ],
+            ]),
+        ];
+
+        $res = $this->withToken($token)->postJson('/api/cases/unplanned', $payload, ['Idempotency-Key' => 'acil-vaka-1'])
+            ->assertCreated()
+            ->assertJsonPath('case.status', 'recorded')
+            ->assertJsonPath('case.is_unplanned', true)
+            ->assertJsonPath('case.user_id', $this->rep->id)
+            ->assertJsonCount(4, 'case.items')
+            ->assertJsonCount(2, 'case.photos')
+            ->assertJsonPath('case.photos.0.label', 'Kullanım formu')
+            ->assertJsonPath('case.events.0.type', 'unplanned');
+        $id = $res->json('case.id');
+
+        // Kullanılan vida dolaptan düştü
+        $this->assertNull(Stock::where('warehouse_id', $this->shelf->id)->where('serial_number', 'SN-1')->where('quantity', '>', 0)->first());
+        Mail::assertSent(CaseDocumentMail::class);
+
+        // Aynı istek tekrar gelirse yeni vaka açılmaz
+        $this->withToken($token)->postJson('/api/cases/unplanned', $payload, ['Idempotency-Key' => 'acil-vaka-1'])
+            ->assertOk()->assertJsonPath('case.id', $id);
+        $this->assertSame(1, SurgeryCase::count());
+
+        // Hatalı istek (imza yok) iz bırakmaz
+        $before = StockMovement::count();
+        $this->withToken($token)->postJson('/api/cases/unplanned', [
+            'hospital_id' => $this->hospital->id,
+            ...$this->recordPayload(['signature' => null, 'items' => [
+                ['stock_id' => $this->stockId($this->shelf, ['lot_number' => 'P-1']), 'quantity' => 1, 'status' => 'used'],
+            ]]),
+        ])->assertStatus(422)->assertJsonValidationErrors('signature');
+        $this->assertSame([1, $before], [SurgeryCase::count(), StockMovement::count()]);
+
+        // Başka hastanenin bölümü seçilemez
+        $other = Hospital::create(['name' => 'Başka Hastane']);
+        $this->withToken($token)->postJson('/api/cases/unplanned', [
+            'hospital_id' => $this->hospital->id, 'location_id' => $other->locations()->first()->id, ...$this->recordPayload(),
+        ])->assertStatus(422)->assertJsonValidationErrors('location_id');
+        $this->assertSame(1, SurgeryCase::count());
+    }
+
+    public function test_planned_case_can_be_transferred_within_the_team_and_by_the_manager(): void
+    {
+        $teammate = $this->userWithRole('personel', ['manager_id' => $this->manager->id, 'name' => 'Ece Ekip']);
+        $outsider = $this->userWithRole('personel', ['name' => 'Dış Personel']);
+        $case = $this->plan();
+        $rep = $this->tokenFor($this->rep);
+
+        // Devredilebilecek kişiler: ekip arkadaşı ve yönetici, dışarıdan biri değil
+        $ids = collect($this->withToken($rep)->getJson('/api/cases/transfer-targets')->assertOk()->json())->pluck('id');
+        $this->assertTrue($ids->contains($teammate->id));
+        $this->assertFalse($ids->contains($outsider->id));
+
+        // Ekip dışına devredemez
+        $this->withToken($rep)->postJson("/api/cases/{$case->id}/transfer", ['user_id' => $outsider->id])
+            ->assertStatus(422)->assertJsonValidationErrors('user_id');
+
+        // Ekip arkadaşına devreder; geçmişe yazılır
+        $this->withToken($rep)->postJson("/api/cases/{$case->id}/transfer", ['user_id' => $teammate->id, 'note' => 'Yarın izinliyim'])
+            ->assertOk()
+            ->assertJsonPath('message', "{$case->number} Ece Ekip adlı personele devredildi.")
+            ->assertJsonPath('case.user_id', $teammate->id)
+            ->assertJsonPath('case.events.1.type', 'transferred')
+            ->assertJsonPath('case.events.1.data.to', 'Ece Ekip')
+            ->assertJsonPath('case.events.1.data.note', 'Yarın izinliyim');
+
+        // Devreden kişinin "vakalarım" listesinden çıkar
+        $this->assertNotContains($case->id, collect($this->withToken($rep)->getJson('/api/cases?mine=1')->json('data'))->pluck('id'));
+
+        // Artık sahibi değil: tekrar devredemez
+        $this->withToken($rep)->postJson("/api/cases/{$case->id}/transfer", ['user_id' => $this->rep->id])->assertForbidden();
+
+        // Yeni sahibi vakayı kaydedebilir
+        $this->withToken($this->tokenFor($teammate))->getJson("/api/cases/{$case->id}")->assertOk();
+
+        // Yönetici herkese devredebilir
+        $this->withToken($this->tokenFor($this->manager))->postJson("/api/cases/{$case->id}/transfer", ['user_id' => $outsider->id])
+            ->assertOk()->assertJsonPath('case.user_id', $outsider->id);
+
+        // Kaydedilmiş vaka devredilemez
+        $recorded = $this->plan();
+        $this->withToken($rep)->postJson("/api/cases/{$recorded->id}/record", $this->recordPayload())->assertCreated();
+        $this->withToken($this->tokenFor($this->manager))->postJson("/api/cases/{$recorded->id}/transfer", ['user_id' => $teammate->id])
+            ->assertStatus(422)->assertJsonValidationErrors('status');
+    }
+
+    public function test_photos_can_be_added_after_recording_up_to_the_limit(): void
+    {
+        $case = $this->plan();
+        $rep = $this->tokenFor($this->rep);
+        $this->withToken($rep)->postJson("/api/cases/{$case->id}/record", $this->recordPayload([
+            'photo' => self::PNG, // eski istemci alanı
+        ]))->assertCreated()->assertJsonCount(1, 'case.photos');
+
+        // Planlı vakaya fotoğraf eklenmez
+        $planned = $this->plan();
+        $this->withToken($rep)->postJson("/api/cases/{$planned->id}/photos", ['photos' => [['data' => self::PNG]]])->assertStatus(422);
+
+        // Sonradan kullanım formu eklenir
+        $res = $this->withToken($rep)->postJson("/api/cases/{$case->id}/photos", ['photos' => [['data' => self::PNG, 'kind' => 'usage_form']]])
+            ->assertCreated()->assertJsonCount(2, 'case.photos')->assertJsonPath('case.photos.1.kind', 'usage_form');
+        $photoId = $res->json('case.photos.1.id');
+        $this->withToken($rep)->get("/api/cases/{$case->id}/photos/{$photoId}")->assertOk();
+        $this->withToken($rep)->get("/api/cases/{$case->id}/photo")->assertOk(); // eski adres: ilk fotoğraf
+        $this->assertContains('photo_added', $case->events()->pluck('type')->all());
+
+        // Toplam 10'u geçemez
+        $nine = array_fill(0, 9, ['data' => self::PNG]);
+        $this->withToken($rep)->postJson("/api/cases/{$case->id}/photos", ['photos' => $nine])
+            ->assertStatus(422)->assertJsonValidationErrors('photos');
+        $this->withToken($rep)->postJson("/api/cases/{$case->id}/photos", ['photos' => array_fill(0, 11, ['data' => self::PNG])])
+            ->assertStatus(422)->assertJsonValidationErrors('photos');
+
+        // Başkasının vakasının fotoğrafı görülemez
+        $outsider = $this->userWithRole('personel');
+        $this->withToken($this->tokenFor($outsider))->get("/api/cases/{$case->id}/photos/{$photoId}")->assertNotFound();
+
+        // PDF fotoğraflarla oluşur
+        $this->withToken($rep)->get("/api/cases/{$case->id}/pdf")->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    }
 }

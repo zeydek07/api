@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Delivery;
+use App\Models\ProofPhoto;
 use App\Models\SurgeryCase;
 use App\Models\SurgeryCaseItem;
 use App\Models\User;
 use App\Services\CaseDocument;
 use App\Services\CaseService;
 use App\Support\CapturedLocation;
+use App\Support\ProofPhotos;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,6 +59,8 @@ class SurgeryCaseController extends Controller
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             ->when($request->filled('hospital_id'), fn ($q) => $q->where('hospital_id', $request->hospital_id))
             ->when($request->filled('user_id'), fn ($q) => $q->where('user_id', $request->user_id))
+            // Saha listesi: yalnızca sorumlusu olduğum vakalar (devrettiğim vaka listeden çıkar)
+            ->when($request->boolean('mine'), fn ($q) => $q->where('user_id', $request->user()->id))
             ->when($request->filled('doctor_id'), fn ($q) => $q->where('doctor_id', $request->doctor_id))
             ->when($request->filled('from'), fn ($q) => $q->where('scheduled_at', '>=', $request->date('from', null, $tz)->startOfDay()->utc()))
             ->when($request->filled('to'), fn ($q) => $q->where('scheduled_at', '<=', $request->date('to', null, $tz)->endOfDay()->utc()))
@@ -106,34 +109,79 @@ class SurgeryCaseController extends Controller
     public function record(Request $request, int $id): JsonResponse
     {
         $case = self::scoped($request->user())->findOrFail($id);
-        $data = $request->validate([
-            'protocol_no' => ['nullable', 'string', 'max:60'],
-            'note' => ['nullable', 'string', 'max:1000'],
-            'contact_id' => ['nullable', 'integer'],
-            'signer_name' => ['nullable', 'string', 'max:255'],
-            'signer_title' => ['nullable', 'string', 'max:120'],
-            'receiver_email' => ['nullable', 'email', 'max:255'],
-            'items' => ['required', 'array', 'min:1', 'max:300'],
-            'items.*.stock_id' => ['required', 'integer'],
-            'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:100000'],
-            'items.*.status' => ['required', Rule::in(SurgeryCaseItem::STATUSES)],
-            'signature' => ['nullable', 'string', 'max:900000'],
-            'photo' => ['nullable', 'string', 'max:8500000'],
-            ...CapturedLocation::rules(),
-            'device_time' => ['nullable', 'date'],
-        ], CapturedLocation::messages());
+        $data = $this->recordRules($request);
 
-        $key = $request->header('Idempotency-Key');
-        if ($key !== null && (strlen($key) < 8 || strlen($key) > 100)) {
-            return response()->json(['message' => 'Idempotency-Key 8-100 karakter olmalı.'], 422);
-        }
-
+        $key = $this->idempotencyKey($request);
         $result = $this->cases->record($request->user(), $case, $data, $key);
 
         return response()->json([
             'message' => $result['replayed'] ? 'Bu kayıt daha önce alınmıştı.' : "{$case->number} kaydedildi; onaya gönderildi.",
             'case' => $this->detail($result['case']),
         ], $result['replayed'] ? 200 : 201);
+    }
+
+    /** Plansız (acil) vaka: plan olmadan hastane seçilip ürünler doğrudan kaydedilir */
+    public function recordUnplanned(Request $request): JsonResponse
+    {
+        $data = [
+            ...$request->validate([
+                'hospital_id' => ['required', 'integer', 'exists:hospitals,id'],
+                'location_id' => ['nullable', 'integer'],
+                'doctor_id' => ['nullable', 'integer'],
+                'user_id' => ['nullable', 'integer'],
+                'procedure' => ['nullable', 'string', 'max:200'],
+            ]),
+            ...$this->recordRules($request),
+        ];
+        $result = $this->cases->recordUnplanned($request->user(), $data, $this->idempotencyKey($request));
+        $case = $result['case'];
+
+        return response()->json([
+            'message' => $result['replayed'] ? 'Bu kayıt daha önce alınmıştı.' : "{$case->number} (plansız vaka) kaydedildi; onaya gönderildi.",
+            'case' => $this->detail($case),
+        ], $result['replayed'] ? 200 : 201);
+    }
+
+    /** Vakayı başka personele devret */
+    public function transfer(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'integer'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+        $case = self::scoped($request->user())->findOrFail($id);
+        $case = $this->cases->transfer($request->user(), $case, (int) $data['user_id'], $data['note'] ?? null);
+
+        return response()->json([
+            'message' => "{$case->number} {$case->user->name} adlı personele devredildi.",
+            'case' => $this->detail($case),
+        ]);
+    }
+
+    /** Vakanın devredilebileceği kişiler */
+    public function transferTargets(Request $request): JsonResponse
+    {
+        return response()->json($this->cases->transferTargets($request->user()));
+    }
+
+    /** Kaydedilmiş vakaya sonradan fotoğraf ekle */
+    public function addPhotos(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(ProofPhotos::rules(), ProofPhotos::messages());
+        $case = self::scoped($request->user())->findOrFail($id);
+        $case = $this->cases->addPhotos($request->user(), $case, $data);
+
+        return response()->json(['message' => 'Fotoğraf eklendi.', 'case' => $this->detail($case)], 201);
+    }
+
+    /** Tek fotoğraf dosyası */
+    public function photo(Request $request, int $id, int $photoId): StreamedResponse
+    {
+        $case = self::scoped($request->user())->findOrFail($id);
+        $photo = $case->photos()->findOrFail($photoId);
+        abort_unless(Storage::disk('local')->exists($photo->path), 404);
+
+        return Storage::disk('local')->response($photo->path, null, ['Cache-Control' => 'private, max-age=3600']);
     }
 
     public function approve(Request $request, int $id): JsonResponse
@@ -194,7 +242,7 @@ class SurgeryCaseController extends Controller
     public function proof(Request $request, int $id, string $kind): StreamedResponse
     {
         $case = self::scoped($request->user())->findOrFail($id);
-        $path = $kind === 'signature' ? $case->signature_path : $case->photo_path;
+        $path = $kind === 'signature' ? $case->signature_path : $case->photos()->value('path');
         abort_unless($path && Storage::disk('local')->exists($path), 404);
 
         return Storage::disk('local')->response($path, null, ['Cache-Control' => 'private, max-age=3600']);
@@ -212,6 +260,36 @@ class SurgeryCaseController extends Controller
         }
 
         return $q->where(fn ($w) => $w->where('user_id', $user->id)->orWhere('created_by', $user->id));
+    }
+
+    private function recordRules(Request $request): array
+    {
+        return $request->validate([
+            'protocol_no' => ['nullable', 'string', 'max:60'],
+            'note' => ['nullable', 'string', 'max:1000'],
+            'contact_id' => ['nullable', 'integer'],
+            'signer_name' => ['nullable', 'string', 'max:255'],
+            'signer_title' => ['nullable', 'string', 'max:120'],
+            'receiver_email' => ['nullable', 'email', 'max:255'],
+            'items' => ['required', 'array', 'min:1', 'max:300'],
+            'items.*.stock_id' => ['required', 'integer'],
+            'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:100000'],
+            'items.*.status' => ['required', Rule::in(SurgeryCaseItem::STATUSES)],
+            'signature' => ['nullable', 'string', 'max:900000'],
+            ...ProofPhotos::rules(),
+            ...CapturedLocation::rules(),
+            'device_time' => ['nullable', 'date'],
+        ], [...CapturedLocation::messages(), ...ProofPhotos::messages()]);
+    }
+
+    private function idempotencyKey(Request $request): ?string
+    {
+        $key = $request->header('Idempotency-Key');
+        if ($key !== null && (strlen($key) < 8 || strlen($key) > 100)) {
+            abort(response()->json(['message' => 'Idempotency-Key 8-100 karakter olmalı.'], 422));
+        }
+
+        return $key;
     }
 
     private function planRules(Request $request, bool $partial = false): array
@@ -245,6 +323,9 @@ class SurgeryCaseController extends Controller
             'items' => fn ($q) => $q->orderByRaw("CASE status WHEN 'used' THEN 0 WHEN 'opened' THEN 1 ELSE 2 END")->orderBy('product_id')->orderBy('id'),
             'items.product:id,name,code,gtin,unit,tracking',
             'items.warehouse:id,name,path,type',
+            'photos:id,owner_type,owner_id,kind,bytes,created_by,created_at',
+            'photos.creator:id,name',
+            'events.user:id,name',
         ]);
     }
 }

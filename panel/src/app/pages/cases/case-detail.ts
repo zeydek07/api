@@ -5,17 +5,18 @@ import { Component, OnDestroy, computed, effect, inject, input, signal } from '@
 import { RouterLink } from '@angular/router';
 import { API_URL, errorMessage, qty } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
-import { CASE_ITEM_LABELS, CASE_STATUS_BADGES, CASE_STATUS_LABELS, SurgeryCase, SurgeryCaseItem } from '../../core/models';
+import { CASE_ITEM_LABELS, CASE_STATUS_BADGES, CASE_STATUS_LABELS, CaseEvent, SurgeryCase, SurgeryCaseItem } from '../../core/models';
 import { LOCATION_ERROR_LABELS } from '../../core/location';
 import { confirm } from '../../ui/confirm';
 import { ExpiryBadge } from '../../ui/expiry-badge';
 import { openModal } from '../../ui/modal';
 import { ToastService } from '../../ui/toast';
-import { CancelCaseDialog, EmailCaseDialog, PlanCaseDialog } from './case-dialogs';
+import { PhotoGallery } from '../../ui/photo-gallery';
+import { CancelCaseDialog, EmailCaseDialog, PlanCaseDialog, TransferCaseDialog } from './case-dialogs';
 
 /** Vaka kartı: plan, kullanılan ürünler, imza ve onay/faturalama durumu */
 @Component({
-  imports: [DatePipe, NgTemplateOutlet, RouterLink, ExpiryBadge],
+  imports: [DatePipe, NgTemplateOutlet, RouterLink, ExpiryBadge, PhotoGallery],
   template: `
     <div class="mb-4 flex flex-wrap items-center gap-2">
       <a routerLink="/vakalar" class="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-ink">
@@ -25,6 +26,9 @@ import { CancelCaseDialog, EmailCaseDialog, PlanCaseDialog } from './case-dialog
       @if (c(); as doc) {
         @if (canApprove()) {
           <button class="btn btn-primary" [disabled]="busy()" (click)="approve()"><span class="icon">task_alt</span> Onayla</button>
+        }
+        @if (canTransfer()) {
+          <button class="btn btn-secondary" (click)="transfer()"><span class="icon">swap_horiz</span> Devret</button>
         }
         @if (canEditPlan()) {
           <button class="btn btn-secondary" (click)="editPlan()"><span class="icon">edit_calendar</span> Planı düzenle</button>
@@ -90,6 +94,9 @@ import { CancelCaseDialog, EmailCaseDialog, PlanCaseDialog } from './case-dialog
           </div>
           <div class="text-right">
             <div class="flex flex-wrap items-center justify-end gap-1.5">
+              @if (doc.is_unplanned) {
+                <span class="badge badge-warn"><span class="icon text-[13px]">bolt</span> Plansız (acil)</span>
+              }
               @if (doc.is_overdue) {
                 <span class="badge badge-danger"><span class="icon text-[13px]">schedule</span> Kaydı gecikti</span>
               }
@@ -245,29 +252,50 @@ import { CancelCaseDialog, EmailCaseDialog, PlanCaseDialog } from './case-dialog
         }
 
         <!-- Kanıt -->
-        @if (doc.has_signature || doc.has_photo) {
-          <section class="mt-8 grid gap-6 sm:grid-cols-2">
-            @if (doc.has_signature) {
-              <div>
-                <h2 class="doc-label">İmza</h2>
-                @if (signatureUrl(); as s) {
-                  <img [src]="s" alt="Tutanağı imzalayanın imzası" class="h-36 w-full rounded-xl border border-line bg-white object-contain" />
-                } @else {
-                  <div class="grid h-36 place-items-center rounded-xl border border-dashed border-line text-sm text-muted">Yükleniyor…</div>
-                }
-                <div class="mt-1 text-center text-xs text-muted">{{ doc.signer_name }}</div>
-              </div>
+        @if (doc.has_signature) {
+          <section class="mt-8">
+            <h2 class="doc-label">İmza</h2>
+            @if (signatureUrl(); as s) {
+              <img [src]="s" alt="Tutanağı imzalayanın imzası" class="h-36 w-full max-w-md rounded-xl border border-line bg-white object-contain" />
+            } @else {
+              <div class="grid h-36 max-w-md place-items-center rounded-xl border border-dashed border-line text-sm text-muted">Yükleniyor…</div>
             }
-            @if (doc.has_photo) {
-              <div>
-                <h2 class="doc-label">Fotoğraf</h2>
-                @if (photoUrl(); as p) {
-                  <img [src]="p" alt="Vaka fotoğrafı" class="h-36 w-full rounded-xl border border-line object-cover" />
-                } @else {
-                  <div class="grid h-36 place-items-center rounded-xl border border-dashed border-line text-sm text-muted">Yükleniyor…</div>
-                }
-              </div>
-            }
+            <div class="mt-1 max-w-md text-center text-xs text-muted">{{ doc.signer_name }}</div>
+          </section>
+        }
+
+        @if (doc.status !== 'planned' || doc.photos?.length) {
+          <section class="mt-8">
+            <app-photo-gallery
+              [photos]="doc.photos ?? []"
+              [base]="'/cases/' + doc.id"
+              [canAdd]="doc.status === 'recorded' || doc.status === 'approved'"
+              (changed)="load()"
+            />
+          </section>
+        }
+
+        <!-- Geçmiş -->
+        @if (doc.events?.length) {
+          <section class="mt-8" aria-labelledby="case-history">
+            <h2 class="doc-label" id="case-history">Geçmiş</h2>
+            <ol class="relative ms-2 border-s border-line" data-testid="case-history">
+              @for (ev of doc.events; track ev.id) {
+                <li class="relative pb-4 ps-5 last:pb-0">
+                  <span class="absolute -start-[5px] top-1.5 size-2.5 rounded-full bg-primary"></span>
+                  <div class="text-sm font-medium text-ink">{{ ev.label }}</div>
+                  <div class="text-xs text-muted">
+                    {{ ev.created_at | date: 'dd.MM.yyyy HH:mm' : 'Europe/Istanbul' }}
+                    @if (ev.user) {
+                      · {{ ev.user.name }}
+                    }
+                  </div>
+                  @if (eventDetail(ev); as d) {
+                    <div class="mt-0.5 whitespace-pre-line text-sm text-muted">{{ d }}</div>
+                  }
+                </li>
+              }
+            </ol>
           </section>
         }
       </article>
@@ -333,7 +361,6 @@ export class CaseDetailPage implements OnDestroy {
   protected readonly busy = signal(false);
   protected readonly actionError = signal('');
   protected readonly signatureUrl = signal<string | null>(null);
-  protected readonly photoUrl = signal<string | null>(null);
 
   protected readonly billable = computed(() => (this.c()?.items ?? []).filter((i) => i.billable));
   protected readonly unused = computed(() => (this.c()?.items ?? []).filter((i) => !i.billable));
@@ -341,6 +368,9 @@ export class CaseDetailPage implements OnDestroy {
 
   protected readonly canApprove = computed(() => this.c()?.status === 'recorded' && this.auth.can('cases.approve'));
   private readonly isOwner = computed(() => this.c()?.user?.id === this.auth.user()?.id);
+  protected readonly canTransfer = computed(
+    () => this.c()?.status === 'planned' && (this.auth.can('cases.approve') || this.isOwner()),
+  );
   protected readonly canEditPlan = computed(
     () => this.c()?.status === 'planned' && (this.auth.can('cases.approve') || (this.isOwner() && this.auth.can('cases.create'))),
   );
@@ -379,7 +409,6 @@ export class CaseDetailPage implements OnDestroy {
         this.revoke();
         // Görseller token'lı istekle alınır (img etiketi token gönderemez)
         if (d.has_signature) this.blob(`${API_URL}/cases/${d.id}/signature`, n, (u) => this.signatureUrl.set(u));
-        if (d.has_photo) this.blob(`${API_URL}/cases/${d.id}/photo`, n, (u) => this.photoUrl.set(u));
       },
       error: (e) => {
         if (n !== this.seq) return;
@@ -400,9 +429,9 @@ export class CaseDetailPage implements OnDestroy {
   }
 
   private revoke(): void {
-    for (const u of [this.signatureUrl(), this.photoUrl()]) if (u) URL.revokeObjectURL(u);
+    const u = this.signatureUrl();
+    if (u) URL.revokeObjectURL(u);
     this.signatureUrl.set(null);
-    this.photoUrl.set(null);
   }
 
   protected source(i: SurgeryCaseItem): string {
@@ -451,6 +480,22 @@ export class CaseDetailPage implements OnDestroy {
     const d = this.c();
     if (!d) return;
     openModal(this.dialog, PlanCaseDialog, { surgeryCase: d }, 'lg').subscribe((saved) => saved && this.load());
+  }
+
+  protected transfer(): void {
+    const d = this.c();
+    if (!d) return;
+    openModal<boolean>(this.dialog, TransferCaseDialog, d, 'md').subscribe((ok) => ok && this.load());
+  }
+
+  /** Olay türüne göre ek ayrıntı satırı */
+  protected eventDetail(ev: CaseEvent): string {
+    const d = ev.data;
+    if (!d) return '';
+    if (ev.type === 'transferred') return [`${d.from ?? '?'} → ${d.to ?? '?'}`, d.note].filter(Boolean).join(' · ');
+    if (ev.type === 'cancelled') return d.reason ?? '';
+    if (ev.type === 'photo_added' && d.count) return `${d.count} fotoğraf eklendi`;
+    return '';
   }
 
   protected cancel(): void {

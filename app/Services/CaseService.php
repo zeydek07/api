@@ -7,11 +7,14 @@ use App\Models\Hospital;
 use App\Models\HospitalContact;
 use App\Models\Stock;
 use App\Models\SurgeryCase;
+use App\Models\SurgeryCaseEvent;
 use App\Models\SurgeryCaseItem;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\CapturedLocation;
 use App\Support\ProofImage;
+use App\Support\ProofPhotos;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -54,6 +57,7 @@ class CaseService
                 'note' => $data['note'] ?? null,
             ]);
             $case->update(['number' => sprintf('VK-%s-%06d', now()->format('Y'), $case->id)]);
+            $this->event($case, $user, 'planned', $owner->id !== $user->id ? ['for' => $owner->name] : null);
 
             return $case;
         });
@@ -81,9 +85,14 @@ class CaseService
         if (isset($data['scheduled_at'])) {
             $data['scheduled_at'] = self::parseTime($data['scheduled_at']);
         }
-        $case->update(collect($data)->only([
+        $case->fill(collect($data)->only([
             'hospital_id', 'location_id', 'doctor_id', 'user_id', 'scheduled_at', 'procedure', 'protocol_no', 'note',
         ])->all());
+        $changed = array_keys($case->getDirty());
+        $case->save();
+        if ($changed) {
+            $this->event($case, $user, 'updated', ['fields' => $changed]);
+        }
 
         return $case->fresh();
     }
@@ -96,99 +105,253 @@ class CaseService
      */
     public function record(User $user, SurgeryCase $case, array $data, ?string $idempotencyKey = null): array
     {
-        if ($idempotencyKey && $case->batch_uuid && DB::table('idempotency_keys')
-            ->where('user_id', $user->id)->where('key', $idempotencyKey)->value('batch_uuid') === $case->batch_uuid) {
+        if ($idempotencyKey && $case->batch_uuid && $this->batchForKey($user, $idempotencyKey) === $case->batch_uuid) {
             return ['case' => $case, 'replayed' => true];
         }
         $this->ensureEditable($user, $case);
+        $prepared = $this->prepareRecord($user, $case->hospital, $data);
+        DB::transaction(fn () => $this->applyRecord($user, $case, $data, $prepared, $idempotencyKey, 'recorded'));
 
-        $hospital = $case->hospital;
+        return ['case' => $this->finishRecord($user, $case, $data, $prepared), 'replayed' => false];
+    }
+
+    /**
+     * Plansız (acil) vaka: plan adımı olmadan hastane seçilip ürünler doğrudan kaydedilir.
+     * Vaka ve kayıt tek işlemdir; doğrulama hatasında hiçbir iz kalmaz.
+     *
+     * @return array{case: SurgeryCase, replayed: bool}
+     */
+    public function recordUnplanned(User $user, array $data, ?string $idempotencyKey = null): array
+    {
+        if ($idempotencyKey && ($batch = $this->batchForKey($user, $idempotencyKey))
+            && ($existing = SurgeryCase::where('batch_uuid', $batch)->first())) {
+            return ['case' => $existing, 'replayed' => true];
+        }
+
+        $hospital = Hospital::findOrFail($data['hospital_id']);
+        if (! $hospital->is_active) {
+            throw ValidationException::withMessages(['hospital_id' => "{$hospital->name} pasif; vaka kaydedilemez."]);
+        }
+        $this->ensureLocation($hospital, $data['location_id'] ?? null);
+        $this->ensureDoctor($hospital, $data['doctor_id'] ?? null);
+        $owner = $this->owner($user, $data['user_id'] ?? null);
+        $prepared = $this->prepareRecord($user, $hospital, $data);
+
+        try {
+            $case = $this->createUnplanned($user, $owner, $hospital, $data, $prepared, $idempotencyKey);
+        } catch (UniqueConstraintViolationException $e) {
+            // Aynı istek eşzamanlı iki kez geldi: ilkini döndür
+            if ($idempotencyKey && ($batch = $this->batchForKey($user, $idempotencyKey))
+                && ($existing = SurgeryCase::where('batch_uuid', $batch)->first())) {
+                return ['case' => $existing, 'replayed' => true];
+            }
+            throw $e;
+        }
+
+        return ['case' => $this->finishRecord($user, $case, $data, $prepared), 'replayed' => false];
+    }
+
+    private function createUnplanned(User $user, User $owner, Hospital $hospital, array $data, array $prepared, ?string $idempotencyKey): SurgeryCase
+    {
+        return DB::transaction(function () use ($user, $owner, $hospital, $data, $prepared, $idempotencyKey) {
+            $case = SurgeryCase::create([
+                'status' => SurgeryCase::PLANNED,
+                'is_unplanned' => true,
+                'hospital_id' => $hospital->id,
+                'location_id' => $data['location_id'] ?? null,
+                'doctor_id' => $data['doctor_id'] ?? null,
+                'user_id' => $owner->id,
+                'created_by' => $user->id,
+                'scheduled_at' => now(),
+                'procedure' => $data['procedure'] ?? null,
+            ]);
+            $case->update(['number' => sprintf('VK-%s-%06d', now()->format('Y'), $case->id)]);
+            $this->applyRecord($user, $case, $data, $prepared, $idempotencyKey, 'unplanned');
+
+            return $case;
+        });
+    }
+
+    /** Kayıttan önce her şeyi doğrula: imzalayan, imza, fotoğraflar, satırlar */
+    private function prepareRecord(User $user, Hospital $hospital, array $data): array
+    {
         if (! $hospital->is_active) {
             throw ValidationException::withMessages(['hospital_id' => "{$hospital->name} pasif."]);
         }
-        [$signerName, $signerTitle, $contactId] = $this->signer($hospital, $data);
+        $signer = $this->signer($hospital, $data);
         $signature = ProofImage::decode($data['signature'] ?? null, 'signature', ProofImage::SIGNATURE_MAX);
         if (! $signature) {
             throw ValidationException::withMessages(['signature' => 'Kullanım tutanağı için imza gerekli.']);
         }
-        $photo = ProofImage::decode($data['photo'] ?? null, 'photo', ProofImage::PHOTO_MAX);
-        $lines = $this->resolveItems($user, $hospital, $data['items']);
 
-        DB::transaction(function () use ($user, $case, $data, $lines, $signerName, $signerTitle, $contactId, $idempotencyKey) {
-            $case = SurgeryCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
-            if ($case->status !== SurgeryCase::PLANNED) {
-                throw ValidationException::withMessages(['status' => 'Bu vakanın ürünleri zaten kaydedilmiş.']);
-            }
-            $batch = (string) Str::uuid();
-            if ($idempotencyKey) {
-                DB::table('idempotency_keys')->insert([
-                    'user_id' => $user->id, 'key' => $idempotencyKey, 'batch_uuid' => $batch,
-                    'created_at' => now(), 'updated_at' => now(),
-                ]);
-            }
-            $location = CapturedLocation::attributes($data);
+        return [
+            'signer' => $signer,
+            'signature' => $signature,
+            'photos' => ProofPhotos::decode($data),
+            'lines' => $this->resolveItems($user, $hospital, $data['items']),
+        ];
+    }
 
-            // Stoktan düş: depo başına bir çağrı (kilit sırası ürün id'sine göre)
-            $meta = [
-                'batch_uuid' => $batch,
-                'surgery_case_id' => $case->id,
-                'hospital_id' => $case->hospital_id,
-                'reference' => $case->number,
-                ...$location,
-            ];
-            $lines->filter(fn ($l) => $l['billable'])->groupBy(fn ($l) => $l['stock']->warehouse_id)
-                ->each(fn (Collection $group, $warehouseId) => $this->stock->consume(
-                    $user,
-                    $group->first()['stock']->warehouse,
-                    $group->map(fn ($l) => [
-                        'product_id' => $l['stock']->product_id, 'stock_id' => $l['stock']->id, 'quantity' => $l['quantity'],
-                    ])->values()->all(),
-                    $meta,
-                ));
+    /** Stoktan düş, satırları yaz, vakayı "kaydedildi" yap (açık bir transaction içinde) */
+    private function applyRecord(User $user, SurgeryCase $case, array $data, array $prepared, ?string $idempotencyKey, string $eventType): void
+    {
+        [$signerName, $signerTitle, $contactId] = $prepared['signer'];
+        $lines = $prepared['lines'];
 
-            $today = Carbon::today();
-            foreach ($lines as $l) {
-                $s = $l['stock'];
-                $case->items()->create([
-                    'product_id' => $s->product_id,
-                    'warehouse_id' => $s->warehouse_id,
-                    'status' => $l['status'],
-                    'quantity' => $l['quantity'],
-                    'lot_number' => $s->lot_number,
-                    'serial_number' => $s->serial_number,
-                    'expiry_date' => $s->expiry_date?->toDateString(),
-                    'expired_at_use' => $l['billable'] && $s->expiry_date && $s->expiry_date->lt($today),
-                ]);
-            }
-
-            $case->update([
-                'status' => SurgeryCase::RECORDED,
-                'performed_at' => now(),
-                'recorded_by' => $user->id,
-                'device_time' => $data['device_time'] ?? null,
-                'protocol_no' => $data['protocol_no'] ?? $case->protocol_no,
-                'note' => $data['note'] ?? $case->note,
-                'contact_id' => $contactId,
-                'signer_name' => $signerName,
-                'signer_title' => $signerTitle,
-                'batch_uuid' => $batch,
-                ...$location,
-            ]);
-        });
-
-        $case->refresh();
-        $paths = ['signature_path' => ProofImage::store("cases/{$case->id}/signature", $signature)];
-        if ($photo) {
-            $paths['photo_path'] = ProofImage::store("cases/{$case->id}/photo", $photo);
+        $case = SurgeryCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
+        if ($case->status !== SurgeryCase::PLANNED) {
+            throw ValidationException::withMessages(['status' => 'Bu vakanın ürünleri zaten kaydedilmiş.']);
         }
-        $case->update($paths);
+        $batch = (string) Str::uuid();
+        if ($idempotencyKey) {
+            DB::table('idempotency_keys')->insert([
+                'user_id' => $user->id, 'key' => $idempotencyKey, 'batch_uuid' => $batch,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+        $location = CapturedLocation::attributes($data);
+
+        // Stoktan düş: depo başına bir çağrı (kilit sırası ürün id'sine göre)
+        $meta = [
+            'batch_uuid' => $batch,
+            'surgery_case_id' => $case->id,
+            'hospital_id' => $case->hospital_id,
+            'reference' => $case->number,
+            ...$location,
+        ];
+        $lines->filter(fn ($l) => $l['billable'])->groupBy(fn ($l) => $l['stock']->warehouse_id)
+            ->each(fn (Collection $group, $warehouseId) => $this->stock->consume(
+                $user,
+                $group->first()['stock']->warehouse,
+                $group->map(fn ($l) => [
+                    'product_id' => $l['stock']->product_id, 'stock_id' => $l['stock']->id, 'quantity' => $l['quantity'],
+                ])->values()->all(),
+                $meta,
+            ));
+
+        $today = Carbon::today();
+        foreach ($lines as $l) {
+            $s = $l['stock'];
+            $case->items()->create([
+                'product_id' => $s->product_id,
+                'warehouse_id' => $s->warehouse_id,
+                'status' => $l['status'],
+                'quantity' => $l['quantity'],
+                'lot_number' => $s->lot_number,
+                'serial_number' => $s->serial_number,
+                'expiry_date' => $s->expiry_date?->toDateString(),
+                'expired_at_use' => $l['billable'] && $s->expiry_date && $s->expiry_date->lt($today),
+            ]);
+        }
+
+        $case->update([
+            'status' => SurgeryCase::RECORDED,
+            'performed_at' => now(),
+            'recorded_by' => $user->id,
+            'device_time' => $data['device_time'] ?? null,
+            'protocol_no' => $data['protocol_no'] ?? $case->protocol_no,
+            'note' => $data['note'] ?? $case->note,
+            'contact_id' => $contactId,
+            'signer_name' => $signerName,
+            'signer_title' => $signerTitle,
+            'batch_uuid' => $batch,
+            ...$location,
+        ]);
+        $this->event($case, $user, $eventType, [
+            'lines' => $lines->count(),
+            'photos' => count($prepared['photos']),
+        ]);
+    }
+
+    /** Transaction dışında: imza ve fotoğrafları yaz, tutanağı e-postala */
+    private function finishRecord(User $user, SurgeryCase $case, array $data, array $prepared): SurgeryCase
+    {
+        $case->refresh();
+        $case->update(['signature_path' => ProofImage::store("cases/{$case->id}/signature", $prepared['signature'])]);
+        ProofPhotos::store($case, "cases/{$case->id}", $prepared['photos'], $user);
 
         // Tutanağın kopyası hastane personeline
         if ($to = $this->recipient($case, $data['receiver_email'] ?? null)) {
             $this->document->email($case, $to);
         }
 
-        return ['case' => $case->fresh(), 'replayed' => false];
+        return $case->fresh();
+    }
+
+    /**
+     * Vakayı başka bir personele devret (yalnızca planlı vaka).
+     * Sahibi yalnızca kendi ekibine (aynı yöneticiye bağlı kişiler, yöneticisi ya da kendi altındakiler)
+     * devredebilir; onay yetkilisi herkese.
+     */
+    public function transfer(User $user, SurgeryCase $case, int $toUserId, ?string $note): SurgeryCase
+    {
+        if ($case->status !== SurgeryCase::PLANNED) {
+            throw ValidationException::withMessages(['status' => 'Yalnızca planlı (ürünleri kaydedilmemiş) vaka devredilebilir.']);
+        }
+        $approver = $user->hasPermission('cases.approve');
+        if ($case->user_id !== $user->id && ! $approver) {
+            abort(response()->json(['message' => 'Bu vaka başka bir personele ait.'], 403));
+        }
+        if ($toUserId === $case->user_id) {
+            throw ValidationException::withMessages(['user_id' => 'Vaka zaten bu personelde.']);
+        }
+        $target = $this->transferTargets($user)->contains('id', $toUserId) ? User::find($toUserId) : null;
+        if (! $target) {
+            throw ValidationException::withMessages(['user_id' => $approver
+                ? 'Seçilen kişi vaka yetkisi olan aktif bir personel değil.'
+                : 'Vakayı yalnızca kendi ekibinizdeki bir personele devredebilirsiniz.']);
+        }
+
+        return DB::transaction(function () use ($user, $case, $target, $note) {
+            $case = SurgeryCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
+            if ($case->status !== SurgeryCase::PLANNED) {
+                throw ValidationException::withMessages(['status' => 'Yalnızca planlı vaka devredilebilir.']);
+            }
+            $from = $case->user;
+            $case->update(['user_id' => $target->id]);
+            $this->event($case, $user, 'transferred', [
+                'from' => $from?->name, 'from_id' => $from?->id,
+                'to' => $target->name, 'to_id' => $target->id,
+                'note' => $note,
+            ]);
+
+            return $case->fresh();
+        });
+    }
+
+    /** Kullanıcının vaka devredebileceği kişiler (vaka yetkisi olan aktif personel) */
+    public function transferTargets(User $user): Collection
+    {
+        $q = User::query()->where('is_active', true)->orderBy('name');
+        if (! $user->hasPermission('cases.approve')) {
+            $team = $user->teamUserIds();
+            $q->where(fn ($w) => $w->whereIn('id', $team)
+                ->when($user->manager_id, fn ($x) => $x->orWhere('manager_id', $user->manager_id)->orWhere('id', $user->manager_id)));
+        }
+
+        return $q->get()
+            ->filter(fn (User $u) => $u->hasPermission('cases.create'))
+            ->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email, 'is_me' => $u->id === $user->id])
+            ->values();
+    }
+
+    /** Kaydedilmiş vakaya sonradan fotoğraf ekle (ör. kullanım formu sonradan alındı) */
+    public function addPhotos(User $user, SurgeryCase $case, array $data): SurgeryCase
+    {
+        if (! in_array($case->status, [SurgeryCase::RECORDED, SurgeryCase::APPROVED], true)) {
+            throw ValidationException::withMessages(['photos' => 'Fotoğraf yalnızca ürünleri kaydedilmiş vakaya eklenebilir.']);
+        }
+        if ($case->user_id !== $user->id && $case->recorded_by !== $user->id && ! $user->hasPermission('cases.approve')) {
+            abort(response()->json(['message' => 'Bu vaka başka bir personele ait.'], 403));
+        }
+        $decoded = ProofPhotos::decode($data, $case->photos()->count());
+        if (! $decoded) {
+            throw ValidationException::withMessages(['photos' => 'Fotoğraf seçin.']);
+        }
+        ProofPhotos::store($case, "cases/{$case->id}", $decoded, $user);
+        $this->event($case, $user, 'photo_added', ['count' => count($decoded)]);
+
+        return $case->fresh();
     }
 
     public function approve(User $user, SurgeryCase $case): SurgeryCase
@@ -197,6 +360,7 @@ class CaseService
             throw ValidationException::withMessages(['status' => 'Yalnızca ürünleri kaydedilmiş, onay bekleyen vaka onaylanabilir.']);
         }
         $case->update(['status' => SurgeryCase::APPROVED, 'approved_at' => now(), 'approved_by' => $user->id]);
+        $this->event($case, $user, 'approved');
 
         return $case;
     }
@@ -244,6 +408,7 @@ class CaseService
                 'cancelled_by' => $user->id,
                 'cancel_reason' => $reason,
             ]);
+            $this->event($case, $user, 'cancelled', ['reason' => $reason]);
 
             return $case;
         });
@@ -290,6 +455,16 @@ class CaseService
     public static function parseTime(string $value): Carbon
     {
         return Carbon::parse($value, config('app.display_timezone'))->utc();
+    }
+
+    private function event(SurgeryCase $case, ?User $user, string $type, ?array $data = null): void
+    {
+        $case->events()->create(['user_id' => $user?->id, 'type' => $type, 'data' => $data]);
+    }
+
+    private function batchForKey(User $user, string $key): ?string
+    {
+        return DB::table('idempotency_keys')->where('user_id', $user->id)->where('key', $key)->value('batch_uuid');
     }
 
     /** Vakanın sahibi (ya da onay yetkilisi) mi, vaka hâlâ planlı mı */

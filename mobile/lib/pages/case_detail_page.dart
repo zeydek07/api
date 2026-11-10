@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../core/api.dart';
 import '../core/models.dart';
+import '../core/session.dart';
 import '../ui/case_widgets.dart';
 import '../ui/common.dart';
+import '../ui/photos.dart';
 import 'case_plan_page.dart';
 import 'case_record_page.dart';
 
@@ -95,6 +97,107 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     }
   }
 
+  /// Planlı vakada işlem (kaydet, düzenle, devret, iptal): sahibi ya da onay yetkilisi
+  bool _canAct(SurgeryCase c) =>
+      c.isPlanned && (c.userId == Session.instance.user?.id || Session.instance.can('cases.approve'));
+
+  Future<void> _transfer() async {
+    final c = _case!;
+    List<Map<String, dynamic>> people;
+    try {
+      people = List<Map<String, dynamic>>.from(await _api.get('cases/transfer-targets')).where((p) => p['id'] != c.userId).toList();
+    } on ApiException catch (e) {
+      if (mounted) showMessage(context, e.message, error: true);
+      return;
+    }
+    if (!mounted) return;
+    if (people.isEmpty) return showMessage(context, 'Vakayı devredebileceğiniz kimse yok.', error: true);
+
+    Map<String, dynamic>? to;
+    final note = TextEditingController();
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: Text('Vakayı devret', style: Theme.of(ctx).textTheme.titleLarge),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('${c.number} kime geçsin?', style: TextStyle(color: Theme.of(ctx).hintColor)),
+                  ),
+                  Flexible(
+                    child: RadioGroup<int>(
+                      groupValue: to?['id'],
+                      onChanged: (id) => setLocal(() => to = people.firstWhere((p) => p['id'] == id)),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final p in people)
+                            RadioListTile<int>(value: p['id'], title: Text(p['name'] ?? ''), subtitle: Text(p['email'] ?? '')),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: TextField(controller: note, decoration: const InputDecoration(labelText: 'Not (isteğe bağlı)', hintText: 'ör. Yarın izinliyim')),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                      onPressed: to == null ? null : () => Navigator.pop(ctx, true),
+                      icon: const Icon(Icons.swap_horiz),
+                      label: Text(to == null ? 'Kişi seçin' : '${to!['name']} adlı kişiye devret'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (ok != true || to == null) return;
+    try {
+      final r = await _api.post('cases/${c.id}/transfer', {
+        'user_id': to!['id'],
+        'note': note.text.trim().isEmpty ? null : note.text.trim(),
+      });
+      if (mounted) showMessage(context, r['message']);
+      _load();
+    } on ApiException catch (e) {
+      if (mounted) showMessage(context, e.message, error: true);
+    }
+  }
+
+  Future<void> _addPhoto() async {
+    final c = _case!;
+    final p = await pickPhoto(context, casePhotoKinds, current: c.photos.length, currentBytes: 0);
+    if (p == null) return;
+    try {
+      await _api.post('cases/${c.id}/photos', {
+        'photos': [p.toJson()],
+      });
+      if (mounted) showMessage(context, 'Fotoğraf eklendi.');
+      _load();
+    } on ApiException catch (e) {
+      if (mounted) showMessage(context, e.message, error: true);
+    }
+  }
+
   Future<void> _sendEmail() async {
     final c = _case!;
     final ctrl = TextEditingController(text: c.json['email_to'] ?? (c.json['contact'] as Map?)?['email'] ?? '');
@@ -126,12 +229,17 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       appBar: AppBar(
         title: Text(c?.number ?? 'Vaka'),
         actions: [
-          if (c != null && c.isPlanned)
+          if (c != null && _canAct(c))
             PopupMenuButton<String>(
-              onSelected: (v) => v == 'edit' ? _open(CasePlanPage(existing: c)) : _cancel(),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Planı düzenle'))),
-                PopupMenuItem(value: 'cancel', child: ListTile(leading: Icon(Icons.block), title: Text('Vakayı iptal et'))),
+              onSelected: (v) => switch (v) {
+                'edit' => _open(CasePlanPage(existing: c)),
+                'transfer' => _transfer(),
+                _ => _cancel(),
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Planı düzenle'))),
+                const PopupMenuItem(value: 'transfer', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text('Başka personele devret'))),
+                const PopupMenuItem(value: 'cancel', child: ListTile(leading: Icon(Icons.block), title: Text('Vakayı iptal et'))),
               ],
             ),
         ],
@@ -141,7 +249,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           : c == null
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(onRefresh: _load, child: _body(context, c)),
-      bottomNavigationBar: c != null && c.isPlanned
+      bottomNavigationBar: c != null && _canAct(c)
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -179,6 +287,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           child: Row(
             children: [
               CaseStatusChip(c),
+              if (c.isUnplanned) const Padding(padding: EdgeInsets.only(left: 6), child: UnplannedChip()),
               const Spacer(),
               Text('${dayLabel(c.scheduledAt)} · ${hm(c.scheduledAt)}', style: theme.textTheme.titleMedium),
             ],
@@ -194,6 +303,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             ),
           ),
         info(Icons.local_hospital_outlined, 'Hastane', c.hospitalName),
+        if (c.userId != Session.instance.user?.id) info(Icons.person_pin_outlined, 'Sorumlu personel', c.ownerName),
         info(Icons.place_outlined, 'Bölüm', c.locationPath),
         info(Icons.person_outline, 'Doktor', c.doctorName),
         info(Icons.healing_outlined, 'Ameliyat', c.procedure),
@@ -253,7 +363,71 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               child: Text('Vaka yönetici onayı bekliyor. Onaylanınca faturalanacaklara düşer.', style: muted),
             ),
         ],
+
+        // Fotoğraflar
+        if (c.photos.isNotEmpty || c.status == 'recorded' || c.status == 'approved') ...[
+          StepTitle(
+            'Fotoğraflar (${c.photos.length})',
+            trailing: (c.status == 'recorded' || c.status == 'approved') && c.photos.length < maxPhotos
+                ? TextButton.icon(onPressed: _addPhoto, icon: const Icon(Icons.add_a_photo_outlined, size: 18), label: const Text('Ekle'))
+                : null,
+          ),
+          if (c.photos.isEmpty)
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Fotoğraf yok. Kullanım formunu sonradan ekleyebilirsiniz.', style: muted))
+          else
+            PhotoGallery(photos: c.photos, basePath: 'cases/${c.id}/photos'),
+        ],
+
+        // Geçmiş
+        if (c.events.isNotEmpty)
+          Card(
+            margin: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+            child: ExpansionTile(
+              leading: const Icon(Icons.history),
+              title: Text('Vaka geçmişi (${c.events.length})'),
+              children: [for (final e in c.events.reversed) _EventTile(e)],
+            ),
+          ),
       ],
+    );
+  }
+}
+
+/// Vaka geçmişindeki bir adım
+class _EventTile extends StatelessWidget {
+  const _EventTile(this.e);
+  final Map<String, dynamic> e;
+
+  @override
+  Widget build(BuildContext context) {
+    final at = trTime(e['created_at']);
+    final data = (e['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final detail = switch (e['type']) {
+      'transferred' => ['${data['from'] ?? '?'} → ${data['to'] ?? '?'}', if (data['note'] != null) data['note']].join(' · '),
+      'cancelled' => data['reason'] as String?,
+      'photo_added' => '${data['count'] ?? 1} fotoğraf',
+      'recorded' || 'unplanned' => '${data['lines'] ?? 0} satır${(data['photos'] ?? 0) > 0 ? ' · ${data['photos']} fotoğraf' : ''}',
+      'planned' => data['for'] == null ? null : '${data['for']} adına',
+      _ => null,
+    };
+    final icon = switch (e['type']) {
+      'transferred' => Icons.swap_horiz,
+      'cancelled' => Icons.block,
+      'approved' => Icons.verified_outlined,
+      'photo_added' => Icons.add_a_photo_outlined,
+      'unplanned' => Icons.bolt,
+      'recorded' => Icons.inventory_2_outlined,
+      _ => Icons.event_note,
+    };
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, size: 20),
+      title: Text(e['label'] ?? e['type'] ?? ''),
+      subtitle: Text([
+        if (at != null) '${dayLabel(at)} ${hm(at)}',
+        if ((e['user'] as Map?)?['name'] != null) (e['user'] as Map)['name'],
+        ?detail,
+      ].join(' · ')),
     );
   }
 }

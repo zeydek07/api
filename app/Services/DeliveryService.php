@@ -10,6 +10,7 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Support\CapturedLocation;
 use App\Support\ProofImage;
+use App\Support\ProofPhotos;
 use App\Models\Warehouse;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -49,7 +50,7 @@ class DeliveryService
 
         // Kanıt görsellerini önceden çöz (geçersizse hiçbir şey kaydedilmeden hata dönsün)
         $signature = ProofImage::decode($data['signature'] ?? null, 'signature', ProofImage::SIGNATURE_MAX);
-        $photo = ProofImage::decode($data['photo'] ?? null, 'photo', ProofImage::PHOTO_MAX);
+        $photos = ProofPhotos::decode($data);
         if (! $isReturn && ! $signature) {
             throw ValidationException::withMessages(['signature' => 'Teslim alan kişinin imzası gerekli.']);
         }
@@ -111,16 +112,10 @@ class DeliveryService
         }
 
         // Kanıt dosyaları: veritabanı kaydı başarılı olduktan sonra yazılır
-        $paths = [];
         if ($signature) {
-            $paths['signature_path'] = ProofImage::store("deliveries/{$delivery->id}/signature", $signature);
+            $delivery->update(['signature_path' => ProofImage::store("deliveries/{$delivery->id}/signature", $signature)]);
         }
-        if ($photo) {
-            $paths['photo_path'] = ProofImage::store("deliveries/{$delivery->id}/photo", $photo);
-        }
-        if ($paths) {
-            $delivery->update($paths);
-        }
+        ProofPhotos::store($delivery, "deliveries/{$delivery->id}", $photos, $user);
 
         // Belge kopyası hastane personeline (e-posta yoksa gönderilmez; panelden sonra gönderilebilir)
         if ($to = $this->recipient($delivery, $data['receiver_email'] ?? null)) {
@@ -128,6 +123,24 @@ class DeliveryService
         }
 
         return ['delivery' => $delivery, 'replayed' => false];
+    }
+
+    /** Tamamlanmış belgeye sonradan fotoğraf ekle (yalnızca belgeyi kaydeden ya da yönetici) */
+    public function addPhotos(User $user, Delivery $delivery, array $data): Delivery
+    {
+        if ($delivery->status !== Delivery::STATUS_COMPLETED) {
+            throw ValidationException::withMessages(['photos' => 'İptal edilmiş belgeye fotoğraf eklenemez.']);
+        }
+        if ($delivery->user_id !== $user->id && ! $user->hasPermission('movements.view_all')) {
+            abort(response()->json(['message' => 'Bu belgeyi başka bir personel kaydetti.'], 403));
+        }
+        $decoded = ProofPhotos::decode($data, $delivery->photos()->count());
+        if (! $decoded) {
+            throw ValidationException::withMessages(['photos' => 'Fotoğraf seçin.']);
+        }
+        ProofPhotos::store($delivery, "deliveries/{$delivery->id}", $decoded, $user);
+
+        return $delivery->fresh();
     }
 
     /**

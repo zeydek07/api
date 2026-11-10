@@ -32,6 +32,27 @@ class CaseStatusChip extends StatelessWidget {
   }
 }
 
+/// Plansız (acil) kaydedilen vaka rozeti
+class UnplannedChip extends StatelessWidget {
+  const UnplannedChip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.bolt, size: 14, color: Colors.orange.shade900),
+          const SizedBox(width: 2),
+          Text('Plansız', style: TextStyle(color: Colors.orange.shade900, fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
 /// Vaka kartı: saat, hastane, bölüm, doktor, ameliyat, durum ve isteğe bağlı eylem düğmesi
 class CaseCard extends StatelessWidget {
   const CaseCard(this.c, {super.key, required this.onTap, this.action, this.showDate = false});
@@ -82,6 +103,7 @@ class CaseCard extends StatelessWidget {
                     Row(
                       children: [
                         CaseStatusChip(c),
+                        if (c.isUnplanned) const Padding(padding: EdgeInsets.only(left: 6), child: UnplannedChip()),
                         const SizedBox(width: 8),
                         Flexible(child: Text(c.number, style: muted, overflow: TextOverflow.ellipsis)),
                       ],

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\DeliveryDocument;
 use App\Services\DeliveryService;
 use App\Support\CapturedLocation;
+use App\Support\ProofPhotos;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -71,6 +72,8 @@ class DeliveryController extends Controller
             'canceller:id,name',
             'lines' => fn ($q) => $q->orderBy('product_id')->orderBy('id'),
             'lines.product:id,name,code,gtin,unit,tracking',
+            'photos:id,owner_type,owner_id,kind,bytes,created_by,created_at',
+            'photos.creator:id,name',
         ]);
 
         return response()->json($delivery);
@@ -91,11 +94,11 @@ class DeliveryController extends Controller
             'items.*.stock_id' => ['required', 'integer'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:100000'],
             'signature' => ['nullable', 'string', 'max:900000'],   // data:image/png;base64,...
-            'photo' => ['nullable', 'string', 'max:8500000'],
+            ...ProofPhotos::rules(),
             'note' => ['nullable', 'string', 'max:1000'],
             ...CapturedLocation::rules(),
             'device_time' => ['nullable', 'date'],
-        ], CapturedLocation::messages());
+        ], [...CapturedLocation::messages(), ...ProofPhotos::messages()]);
 
         $key = $request->header('Idempotency-Key');
         if ($key !== null && (strlen($key) < 8 || strlen($key) > 100)) {
@@ -159,10 +162,33 @@ class DeliveryController extends Controller
     {
         abort_unless(in_array($kind, ['signature', 'photo'], true), 404);
         $delivery = self::scoped($request->user())->findOrFail($id);
-        $path = $kind === 'signature' ? $delivery->signature_path : $delivery->photo_path;
+        $path = $kind === 'signature' ? $delivery->signature_path : $delivery->photos()->value('path');
         abort_unless($path && Storage::disk('local')->exists($path), 404);
 
         return Storage::disk('local')->response($path, null, ['Cache-Control' => 'private, max-age=3600']);
+    }
+
+    /** Belgeye sonradan fotoğraf ekle */
+    public function addPhotos(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(ProofPhotos::rules(), ProofPhotos::messages());
+        $delivery = self::scoped($request->user())->findOrFail($id);
+        $delivery = $this->deliveries->addPhotos($request->user(), $delivery, $data);
+
+        return response()->json([
+            'message' => 'Fotoğraf eklendi.',
+            'photos' => $delivery->photos()->with('creator:id,name')->get(['id', 'owner_type', 'owner_id', 'kind', 'bytes', 'created_by', 'created_at']),
+        ], 201);
+    }
+
+    /** Tek fotoğraf dosyası */
+    public function photo(Request $request, int $id, int $photoId): StreamedResponse
+    {
+        $delivery = self::scoped($request->user())->findOrFail($id);
+        $photo = $delivery->photos()->findOrFail($photoId);
+        abort_unless(Storage::disk('local')->exists($photo->path), 404);
+
+        return Storage::disk('local')->response($photo->path, null, ['Cache-Control' => 'private, max-age=3600']);
     }
 
     /** Görme kapsamı */

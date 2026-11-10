@@ -310,11 +310,23 @@ class DeliveryTest extends ApiTestCase
     {
         $this->contact->update(['email' => 'ayse@kartal.test']);
         $res = $this->withToken($this->tokenFor($this->rep))
-            ->postJson('/api/deliveries', $this->payload(['photo' => $this->jpeg()]))->assertCreated();
+            ->postJson('/api/deliveries', $this->payload([
+                'photo' => $this->jpeg(),
+                'photos' => [['data' => $this->jpeg(), 'kind' => 'delivery_form']],
+            ]))->assertCreated();
 
         $res->assertJsonPath('delivery.email_status', 'sent')->assertJsonPath('delivery.email_to', 'ayse@kartal.test');
         $d = Delivery::first();
-        Storage::disk('local')->assertExists($d->photo_path);
+        // Eski tek fotoğraf alanı ve yeni çoklu fotoğraflar birlikte kaydedilir
+        $this->assertSame(['delivery_form', 'other'], $d->photos->pluck('kind')->all());
+        $d->photos->each(fn ($p) => Storage::disk('local')->assertExists($p->path));
+        $this->withToken($this->tokenFor($this->rep))->getJson("/api/deliveries/{$d->id}")
+            ->assertJsonCount(2, 'photos')->assertJsonPath('photos.0.label', 'Teslim formu / irsaliye');
+        $this->withToken($this->tokenFor($this->rep))->get("/api/deliveries/{$d->id}/photos/{$d->photos[0]->id}")->assertOk();
+
+        // Sonradan fotoğraf eklenir
+        $this->withToken($this->tokenFor($this->rep))->postJson("/api/deliveries/{$d->id}/photos", ['photos' => [['data' => $this->jpeg(), 'kind' => 'shelf']]])
+            ->assertCreated()->assertJsonCount(3, 'photos');
 
         Mail::assertSent(DeliveryDocumentMail::class, function (DeliveryDocumentMail $m) use ($d) {
             $att = $m->attachments()[0];

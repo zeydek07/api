@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * Vaka (ameliyat).
@@ -25,7 +26,7 @@ class SurgeryCase extends Model
     public const STATUSES = [self::PLANNED, self::RECORDED, self::APPROVED, self::CANCELLED];
 
     protected $fillable = [
-        'number', 'status', 'hospital_id', 'location_id', 'doctor_id', 'user_id', 'created_by',
+        'number', 'status', 'is_unplanned', 'hospital_id', 'location_id', 'doctor_id', 'user_id', 'created_by',
         'scheduled_at', 'procedure', 'protocol_no', 'note',
         'performed_at', 'recorded_by', 'device_time', 'contact_id', 'signer_name', 'signer_title',
         'signature_path', 'photo_path', 'latitude', 'longitude', 'location_accuracy', 'location_error', 'batch_uuid',
@@ -35,11 +36,12 @@ class SurgeryCase extends Model
 
     protected $hidden = ['signature_path', 'photo_path'];
 
-    protected $appends = ['has_signature', 'has_photo', 'is_overdue'];
+    protected $appends = ['has_signature', 'is_overdue'];
 
     protected function casts(): array
     {
         return [
+            'is_unplanned' => 'boolean',
             'scheduled_at' => 'datetime',
             'performed_at' => 'datetime',
             'device_time' => 'datetime',
@@ -54,11 +56,6 @@ class SurgeryCase extends Model
     public function getHasSignatureAttribute(): bool
     {
         return (bool) $this->signature_path;
-    }
-
-    public function getHasPhotoAttribute(): bool
-    {
-        return (bool) $this->photo_path;
     }
 
     /** Saati geçti ama ürünleri kaydedilmedi: faturalanamaz, en kritik bekleyen iş */
@@ -120,5 +117,17 @@ class SurgeryCase extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    /** Belgeye eklenen fotoğraflar (kullanım formu, ürün etiketi...) */
+    public function photos(): MorphMany
+    {
+        return $this->morphMany(ProofPhoto::class, 'owner')->orderBy('id');
+    }
+
+    /** Vaka geçmişi */
+    public function events(): HasMany
+    {
+        return $this->hasMany(SurgeryCaseEvent::class)->orderBy('id');
     }
 }

@@ -72,7 +72,7 @@ test.describe.serial('Vaka döngüsü: planla, kaydet, onayla, faturala (yöneti
     expect(caseNumber).toMatch(/^VK-\d{4}-\d{6}$/);
 
     const article = page.locator('article');
-    await expect(article.getByText('Planlandı', { exact: true })).toBeVisible();
+    await expect(article.locator('header .badge', { hasText: new RegExp('^Planlandı$') })).toBeVisible();
     await expect(article).toContainText(HOSPITAL);
     await expect(article).toContainText('Prof. Dr. E2E Cerrah');
     await expect(article).toContainText('E2E Total diz protezi');
@@ -100,6 +100,36 @@ test.describe.serial('Vaka döngüsü: planla, kaydet, onayla, faturala (yöneti
     await page.locator('app-modal').getByRole('button', { name: 'Kaydet' }).click();
     expect((await saved).ok()).toBe(true);
     await expect(page.locator('article')).toContainText('E2E-PRT-2');
+  });
+
+  test('planlanmış vakayı başka personele devreder; geçmişte "Devredildi" görünür', async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto(`/vakalar/${caseId}`);
+    await expect(page.getByTestId('case-history')).toContainText('Planlandı');
+
+    await page.getByRole('button', { name: /Devret/ }).click();
+    const dialog = page.locator('app-modal');
+    const select = dialog.locator('#tc-user');
+    await expect(dialog.getByRole('button', { name: 'Kaydet' })).toBeDisabled();
+    await expect(select.locator('option')).not.toHaveCount(1);
+    // Mevcut sorumlu (yönetici) listede yok
+    const names = (await select.locator('option').allTextContents()).slice(1);
+    expect(names.length).toBeGreaterThan(0);
+    const target = names[0].replace(/ \(ben\)$/, '');
+    await select.selectOption({ index: 1 });
+    await dialog.locator('#tc-note').fill('E2E devri');
+    const done = page.waitForResponse((r) => r.url().endsWith(`/api/cases/${caseId}/transfer`));
+    await dialog.getByRole('button', { name: 'Kaydet' }).click();
+    expect((await done).ok()).toBe(true);
+
+    // Sorumlu değişti, geçmişte devir kaydı ve notu var
+    const article = page.locator('article');
+    await expect(article.locator('section', { hasText: 'Sorumlu personel' }).first()).toContainText(target);
+    const history = page.getByTestId('case-history');
+    await expect(history).toContainText('Devredildi');
+    await expect(history).toContainText(`${target}`);
+    await expect(history).toContainText('E2E devri');
+    expect(errors).toEqual([]);
   });
 
   test('ameliyatta kaydedilen vakayı onaylar', async ({ page }) => {
@@ -131,7 +161,7 @@ test.describe.serial('Vaka döngüsü: planla, kaydet, onayla, faturala (yöneti
 
     await page.reload();
     const article = page.locator('article');
-    await expect(article.getByText('Onay bekliyor', { exact: true })).toBeVisible();
+    await expect(article.locator('header .badge', { hasText: new RegExp('^Onay bekliyor$') })).toBeVisible();
     await expect(article).toContainText(productName);
     await expect(article).toContainText(/Hastane:|Araç:/);
     await expect(article).toContainText('E2E Hemşire');
@@ -149,9 +179,66 @@ test.describe.serial('Vaka döngüsü: planla, kaydet, onayla, faturala (yöneti
     const approved = page.waitForResponse((r) => r.url().endsWith(`/api/cases/${caseId}/approve`));
     await page.locator('.modal-panel').getByRole('button', { name: 'Onayla' }).click();
     expect((await approved).ok()).toBe(true);
-    await expect(article.getByText('Onaylandı', { exact: true })).toBeVisible();
+    await expect(article.locator('header .badge', { hasText: new RegExp('^Onaylandı$') })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Onayla' })).toHaveCount(0);
 
+    expect(errors).toEqual([]);
+  });
+
+  test('onaylı vakaya fotoğraf eklenir; galeri küçük resmi ve geçmiş kaydı görünür', async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto(`/vakalar/${caseId}`);
+    await expect(page.getByText('Fotoğraf eklenmemiş.')).toBeVisible();
+    await page.locator('app-photo-gallery input[type=file]').setInputFiles({
+      name: 'form.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(SIGNATURE.split(',')[1], 'base64'),
+    });
+    const gallery = page.getByTestId('photo-gallery');
+    await expect(gallery.locator('li')).toHaveCount(1);
+    await expect(gallery.getByRole('img', { name: 'Diğer' })).toBeVisible();
+    await expect(page.getByTestId('case-history')).toContainText(/fotoğraf/i);
+
+    // Tıklayınca büyük görünüm açılır, Esc ile kapanır
+    await gallery.getByRole('button', { name: /Fotoğrafı büyüt/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Diğer' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Diğer' })).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('plansız (acil) vaka kaydedilir; listede ve kartta "Plansız" rozeti görünür', async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto('/vakalar');
+    const kase = await apiGet<{ hospital: { id: number } }>(page, `/cases/${caseId}`);
+    const consignment = await apiGet<{ rows: StockRow[] }>(page, `/hospitals/${kase.hospital.id}/consignment`);
+    const today = new Date().toISOString().slice(0, 10);
+    const usable = (x: StockRow) => Number(x.quantity) >= 1 && (!x.expiry_date || x.expiry_date >= today);
+    let row = consignment.rows.find(usable);
+    if (!row) {
+      const all = await apiGet<{ data: (StockRow & { warehouse: { type: string } })[] }>(page, '/stock?per_page=100');
+      row = all.data.find((x) => x.warehouse.type !== 'consignment' && usable(x));
+    }
+    expect(row, 'kaydedilecek ürün bulunmalı').toBeTruthy();
+    const res = await apiPost<{ case: { id: number; number: string } }>(page, '/cases/unplanned', {
+      hospital_id: kase.hospital.id,
+      signer_name: 'E2E Acil Hemşire',
+      signature: SIGNATURE,
+      latitude: 40.9,
+      longitude: 29.18,
+      location_accuracy: 12,
+      items: [{ stock_id: row!.id, quantity: 1, status: 'used' }],
+    });
+
+    await page.goto('/vakalar');
+    await page.getByRole('textbox', { name: 'Ara' }).fill(res.case.number);
+    await expect(page.locator('tbody tr', { hasText: res.case.number })).toContainText('Plansız');
+
+    await page.goto(`/vakalar/${res.case.id}`);
+    await expect(page.locator('article')).toContainText('Plansız (acil)');
+    await expect(page.getByTestId('case-history')).toContainText('Plansız');
+    // Planlanmamış kayıtta devir yok
+    await expect(page.getByRole('button', { name: /Devret/ })).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 

@@ -154,13 +154,31 @@
             <div class="muted" style="text-align: center; margin-top: 2px">{{ $c->signer_name }}</div>
         </td>
         <td style="width: 50%; padding-left: 8px; vertical-align: top">
-            @if ($photo)
-                <div class="label">Fotoğraf</div>
-                <div class="box"><img src="{{ $photo }}" alt="Fotoğraf"></div>
+            @if (count($photos))
+                <div class="label">Fotoğraf · {{ $photos[0]['label'] }}</div>
+                <div class="box"><img src="{{ $photos[0]['src'] }}" alt="Fotoğraf"></div>
             @endif
         </td>
     </tr>
 </table>
+
+{{-- Birden fazla fotoğraf varsa kalanlar üçerli satırlarda --}}
+@if (count($photos) > 1)
+    <div class="label" style="margin-top: 12px">Diğer fotoğraflar ({{ count($photos) - 1 }})</div>
+    <table>
+        @foreach (array_chunk(array_slice($photos, 1), 3) as $row)
+            <tr>
+                @foreach ($row as $p)
+                    <td style="width: 33%; padding: 3px; vertical-align: top">
+                        <div class="box" style="height: 110px"><img src="{{ $p['src'] }}" alt="{{ $p['label'] }}" style="max-height: 102px; max-width: 160px"></div>
+                        <div class="muted" style="text-align: center; margin-top: 2px">{{ $p['label'] }}</div>
+                    </td>
+                @endforeach
+                @for ($i = count($row); $i < 3; $i++)<td style="width: 33%"></td>@endfor
+            </tr>
+        @endforeach
+    </table>
+@endif
 
 <p class="note" style="margin-top: 14px">
     Bu tutanakta "Kullanıldı" ve "Açıldı" olarak işaretlenen ürünler hastaneye faturalandırılır.

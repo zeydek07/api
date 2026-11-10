@@ -90,6 +90,9 @@ import { PlanCaseDialog } from './case-dialogs';
               <tr class="cursor-pointer" (click)="open(c)">
                 <td>
                   <a class="font-mono font-medium text-ink hover:underline" [routerLink]="['/vakalar', c.id]" (click)="$event.stopPropagation()">{{ c.number }}</a>
+                  @if (c.is_unplanned) {
+                    <span class="badge badge-warn ms-1.5">Plansız</span>
+                  }
                   @if (c.protocol_no) {
                     <div class="cell-sub">Protokol {{ c.protocol_no }}</div>
                   }

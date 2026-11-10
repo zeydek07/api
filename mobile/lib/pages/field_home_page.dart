@@ -190,6 +190,7 @@ class _FieldHomePageState extends State<FieldHomePage> {
                     physics: const NeverScrollableScrollPhysics(),
                     childAspectRatio: 2.6,
                     children: [
+                      _Quick(Icons.bolt, 'Acil vaka kaydet', () => _open(const CasePlanPage(emergency: true))),
                       _Quick(Icons.add_circle_outline, 'Vaka planla', () => _open(const CasePlanPage())),
                       if (Session.instance.can('deliveries.create')) ...[
                         _Quick(Icons.move_to_inbox_outlined, 'Teslim et', () => _open(const DeliveryPage())),

@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:signature/signature.dart';
 import 'package:uuid/uuid.dart';
 
@@ -10,6 +8,7 @@ import '../core/api.dart';
 import '../core/location.dart';
 import '../core/models.dart';
 import '../ui/common.dart';
+import '../ui/photos.dart';
 import '../ui/scanner_page.dart';
 import '../ui/stock_picker.dart';
 
@@ -48,7 +47,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
   final _email = TextEditingController();
 
   /// Teslimat / geri alma fotoğrafı (JPEG, küçültülmüş)
-  Uint8List? _photo;
+  final List<PhotoDraft> _photos = [];
 
   final _cart = StockCart();
   bool _rowsLoading = false;
@@ -238,19 +237,6 @@ class _DeliveryPageState extends State<DeliveryPage> {
         _email.text = c?['email'] ?? '';
       });
 
-  /// Kamera ya da galeriden fotoğraf; sunucuya gitmeden küçültülür
-  Future<void> _takePhoto(ImageSource source) async {
-    FocusScope.of(context).unfocus();
-    try {
-      final file = await ImagePicker().pickImage(source: source, maxWidth: 1600, maxHeight: 1600, imageQuality: 70);
-      if (file == null) return;
-      final bytes = await file.readAsBytes();
-      if (mounted) setState(() => _photo = bytes);
-    } catch (e) {
-      _onError('Fotoğraf alınamadı: $e');
-    }
-  }
-
   String? get _missing {
     if (_hospital == null) return 'Hastane seçin';
     if (_location == null) return 'Lokasyon seçin';
@@ -287,7 +273,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
           'receiver_email': _email.text.trim().isEmpty ? null : _email.text.trim(),
           'items': [for (final (row, q) in _cart.lines) {'stock_id': row.id, 'quantity': q}],
           'signature': signature,
-          'photo': _photo == null ? null : 'data:image/jpeg;base64,${base64Encode(_photo!)}',
+          'photos': [for (final p in _photos) p.toJson()],
           'note': _note.text.trim().isEmpty ? null : _note.text.trim(),
           ...location.toJson(),
           'device_time': DateTime.now().toUtc().toIso8601String(),
@@ -332,7 +318,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
       _signature.clear();
       _signed = false;
       _note.clear();
-      _photo = null;
+      _photos.clear();
     });
     _loadRows();
   }
@@ -523,42 +509,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
               child: Signature(controller: _signature, height: 180, backgroundColor: Colors.white),
             ),
           ),
-          StepTitle(
-            '5. Fotoğraf (isteğe bağlı)',
-            trailing: _photo == null
-                ? null
-                : TextButton(onPressed: () => setState(() => _photo = null), child: const Text('Kaldır')),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _photo == null
-                ? Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _takePhoto(ImageSource.camera),
-                          icon: const Icon(Icons.photo_camera_outlined),
-                          label: const Text('Fotoğraf çek'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _takePhoto(ImageSource.gallery),
-                          icon: const Icon(Icons.photo_library_outlined),
-                          label: const Text('Galeriden'),
-                        ),
-                      ),
-                    ],
-                  )
-                : GestureDetector(
-                    onTap: () => _takePhoto(ImageSource.camera),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(_photo!, height: 200, width: double.infinity, fit: BoxFit.cover, semanticLabel: 'Belge fotoğrafı'),
-                    ),
-                  ),
-          ),
+          const StepTitle('5. Fotoğraflar (isteğe bağlı)'),
+          PhotoDraftsField(photos: _photos, kinds: deliveryPhotoKinds, onChanged: () => setState(() {})),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
             child: Text(

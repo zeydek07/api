@@ -9,6 +9,7 @@ import { AuthService } from '../../core/auth.service';
 import { LOCATION_ERROR_LABELS } from '../../core/location';
 import { DELIVERY_LABELS, Delivery } from '../../core/models';
 import { ExpiryBadge } from '../../ui/expiry-badge';
+import { PhotoGallery } from '../../ui/photo-gallery';
 import { ModalFrame } from '../../ui/modal-frame';
 import { openModal } from '../../ui/modal';
 import { ToastService } from '../../ui/toast';
@@ -122,7 +123,7 @@ export class EmailDeliveryDialog {
 
 /** Yazdırılabilir teslimat belgesi (tarayıcıdan "PDF olarak kaydet" ile PDF olur) */
 @Component({
-  imports: [DatePipe, RouterLink, ExpiryBadge],
+  imports: [DatePipe, RouterLink, ExpiryBadge, PhotoGallery],
   templateUrl: './delivery-document.html',
 })
 export class DeliveryDocumentPage implements OnDestroy {
@@ -138,7 +139,6 @@ export class DeliveryDocumentPage implements OnDestroy {
   protected readonly d = signal<Delivery | null>(null);
   protected readonly notFound = signal(false);
   protected readonly signatureUrl = signal<string | null>(null);
-  protected readonly photoUrl = signal<string | null>(null);
 
   constructor() {
     effect(() => {
@@ -151,6 +151,10 @@ export class DeliveryDocumentPage implements OnDestroy {
     this.revoke();
   }
 
+  protected reload(): void {
+    this.load();
+  }
+
   private load(): void {
     this.http.get<Delivery>(`${API_URL}/deliveries/${this.id()}`).subscribe({
       next: (d) => {
@@ -158,7 +162,6 @@ export class DeliveryDocumentPage implements OnDestroy {
         this.revoke();
         // Görseller token'lı istekle alınır (img etiketi token gönderemez)
         if (d.has_signature) this.blob(`${API_URL}/deliveries/${d.id}/signature`, (u) => this.signatureUrl.set(u));
-        if (d.has_photo) this.blob(`${API_URL}/deliveries/${d.id}/photo`, (u) => this.photoUrl.set(u));
       },
       error: () => this.notFound.set(true),
     });
@@ -169,9 +172,9 @@ export class DeliveryDocumentPage implements OnDestroy {
   }
 
   private revoke(): void {
-    for (const u of [this.signatureUrl(), this.photoUrl()]) if (u) URL.revokeObjectURL(u);
+    const u = this.signatureUrl();
+    if (u) URL.revokeObjectURL(u);
     this.signatureUrl.set(null);
-    this.photoUrl.set(null);
   }
 
   protected units(): number {

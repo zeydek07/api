@@ -35,7 +35,7 @@ class CaseDocument
             'c' => $case,
             'company' => config('app.company'),
             'signature' => ProofImage::dataUri($case->signature_path, 600),
-            'photo' => ProofImage::dataUri($case->photo_path, 1000),
+            'photos' => \App\Support\ProofPhotos::forPdf($case),
         ])->setPaper('a4')->setOption('isFontSubsettingEnabled', true)->output();
     }
 

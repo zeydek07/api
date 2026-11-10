@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:signature/signature.dart';
 import 'package:uuid/uuid.dart';
 
@@ -11,13 +9,25 @@ import '../core/gs1.dart';
 import '../core/location.dart';
 import '../core/models.dart';
 import '../ui/common.dart';
+import '../ui/photos.dart';
 import '../ui/scanner_page.dart';
+
+/// Plansız (acil) vakanın kayıttan önce seçilen bilgileri
+class UnplannedCase {
+  UnplannedCase({required this.hospital, this.location, this.doctor, this.procedure});
+  final Map<String, dynamic> hospital;
+  final Warehouse? location;
+  final Map<String, dynamic>? doctor;
+  final String? procedure;
+}
 
 /// Ameliyathanede vaka kaydı: ürünleri okut, her birini Kullanıldı / Açıldı / Kullanılmadı işaretle,
 /// tutanağı hemşireye / doktora imzalat. Ürün hastane dolabından ya da personelin aracından düşer.
+/// [caseId] planlı vakayı kaydeder; [unplanned] verilirse plan olmadan yeni (acil) vaka açılır.
 class CaseRecordPage extends StatefulWidget {
-  const CaseRecordPage({super.key, required this.caseId});
-  final int caseId;
+  const CaseRecordPage({super.key, this.caseId, this.unplanned}) : assert(caseId != null || unplanned != null);
+  final int? caseId;
+  final UnplannedCase? unplanned;
 
   @override
   State<CaseRecordPage> createState() => _CaseRecordPageState();
@@ -52,7 +62,7 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
 
   final _signature = SignatureController(penStrokeWidth: 2.5, penColor: Colors.black);
   bool _signed = false;
-  Uint8List? _photo;
+  final List<PhotoDraft> _photos = [];
 
   bool _saving = false;
   final String _idempotencyKey = const Uuid().v4();
@@ -71,20 +81,30 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
     super.dispose();
   }
 
+  bool get _isUnplanned => widget.unplanned != null;
+
+  /// Ekranın üstündeki vaka özeti
+  bool get _ready => _isUnplanned || _case != null;
+
   Future<void> _load() async {
     try {
-      final r = await _api.get('cases/${widget.caseId}');
-      final c = SurgeryCase(Map<String, dynamic>.from(r));
-      if (!mounted) return;
-      setState(() {
-        _case = c;
-        _protocol.text = c.protocolNo ?? '';
-      });
-      if (!c.isPlanned) {
-        setState(() => _loadError = 'Bu vakanın ürünleri zaten kaydedilmiş.');
-        return;
+      final int hid;
+      if (_isUnplanned) {
+        hid = widget.unplanned!.hospital['id'];
+      } else {
+        final r = await _api.get('cases/${widget.caseId}');
+        final c = SurgeryCase(Map<String, dynamic>.from(r));
+        if (!mounted) return;
+        setState(() {
+          _case = c;
+          _protocol.text = c.protocolNo ?? '';
+        });
+        if (!c.isPlanned) {
+          setState(() => _loadError = 'Bu vakanın ürünleri zaten kaydedilmiş.');
+          return;
+        }
+        hid = c.hospital!['id'];
       }
-      final hid = c.hospital!['id'];
       final results = await Future.wait([
         _api.get('hospitals/$hid/consignment'),
         _api.get('hospitals/$hid/contacts'),
@@ -179,18 +199,6 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
 
   // ---------------------------------------------------------------- kanıt
 
-  Future<void> _takePhoto(ImageSource source) async {
-    FocusScope.of(context).unfocus();
-    try {
-      final file = await ImagePicker().pickImage(source: source, maxWidth: 1600, maxHeight: 1600, imageQuality: 70);
-      if (file == null) return;
-      final bytes = await file.readAsBytes();
-      if (mounted) setState(() => _photo = bytes);
-    } catch (e) {
-      if (mounted) showMessage(context, 'Fotoğraf alınamadı: $e', error: true);
-    }
-  }
-
   bool get _emailInvalid {
     final e = _email.text.trim();
     return e.isNotEmpty && !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(e);
@@ -208,10 +216,17 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
     setState(() => _saving = true);
     final location = await capturePosition();
     final png = await _signature.toPngBytes();
+    final u = widget.unplanned;
     try {
       final r = await _api.post(
-        'cases/${widget.caseId}/record',
+        u == null ? 'cases/${widget.caseId}/record' : 'cases/unplanned',
         {
+          if (u != null) ...{
+            'hospital_id': u.hospital['id'],
+            'location_id': u.location?.id,
+            'doctor_id': u.doctor?['id'],
+            'procedure': u.procedure,
+          },
           'protocol_no': _protocol.text.trim().isEmpty ? null : _protocol.text.trim(),
           'note': _note.text.trim().isEmpty ? null : _note.text.trim(),
           'contact_id': _otherPerson ? null : _contact?['id'],
@@ -220,7 +235,7 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
           'receiver_email': _email.text.trim().isEmpty ? null : _email.text.trim(),
           'items': [for (final l in _lines) {'stock_id': l.row.id, 'quantity': l.quantity, 'status': l.status}],
           'signature': png == null ? null : 'data:image/png;base64,${base64Encode(png)}',
-          'photo': _photo == null ? null : 'data:image/jpeg;base64,${base64Encode(_photo!)}',
+          'photos': [for (final p in _photos) p.toJson()],
           ...location.toJson(),
           'device_time': DateTime.now().toUtc().toIso8601String(),
         },
@@ -244,20 +259,23 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
     final billable = _lines.where((l) => l.status != 'unused').fold<double>(0, (s, l) => s + l.quantity);
     final unused = _lines.where((l) => l.status == 'unused').fold<double>(0, (s, l) => s + l.quantity);
 
+    final u = widget.unplanned;
     return Scaffold(
-      appBar: AppBar(title: Text(c == null ? 'Vaka kaydı' : '${c.number} · kayıt')),
+      appBar: AppBar(title: Text(u != null ? 'Acil vaka kaydı' : c == null ? 'Vaka kaydı' : '${c.number} · kayıt')),
       body: _loadError != null
           ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_loadError!)))
-          : c == null
+          : !_ready
               ? const Center(child: CircularProgressIndicator())
               : ListView(
                   padding: const EdgeInsets.only(bottom: 16),
                   children: [
                     Card(
                       child: ListTile(
-                        leading: const Icon(Icons.medical_services_outlined),
-                        title: Text(c.hospitalName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text([hm(c.scheduledAt), c.locationPath, c.doctorName, c.procedure].whereType<String>().join(' · ')),
+                        leading: Icon(u != null ? Icons.bolt : Icons.medical_services_outlined, color: u != null ? Colors.orange.shade800 : null),
+                        title: Text(u != null ? u.hospital['name'] ?? '' : c!.hospitalName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(u != null
+                            ? ['Plansız vaka', u.location?.path, u.doctor?['display_name'] ?? u.doctor?['name'], u.procedure].whereType<String>().join(' · ')
+                            : [hm(c!.scheduledAt), c.locationPath, c.doctorName, c.procedure].whereType<String>().join(' · ')),
                       ),
                     ),
 
@@ -404,45 +422,20 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
                       ),
                     ),
 
-                    // 5. Fotoğraf ve not
-                    StepTitle(
-                      '5. Fotoğraf (isteğe bağlı)',
-                      trailing: _photo == null ? null : TextButton(onPressed: () => setState(() => _photo = null), child: const Text('Kaldır')),
-                    ),
+                    // 5. Fotoğraflar ve not
+                    const StepTitle('5. Fotoğraflar (isteğe bağlı)'),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _photo == null
-                          ? Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => _takePhoto(ImageSource.camera),
-                                    icon: const Icon(Icons.photo_camera_outlined),
-                                    label: const Text('Fotoğraf çek'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => _takePhoto(ImageSource.gallery),
-                                    icon: const Icon(Icons.photo_library_outlined),
-                                    label: const Text('Galeriden'),
-                                  ),
-                                ),
-                              ],
-                            )
-                          : ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.memory(_photo!, height: 180, width: double.infinity, fit: BoxFit.cover),
-                            ),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Text('Kullanım formu, ürün etiketleri, hasta etiket sayfası…', style: TextStyle(color: theme.hintColor)),
                     ),
+                    PhotoDraftsField(photos: _photos, kinds: casePhotoKinds, onChanged: () => setState(() {})),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                       child: TextField(controller: _note, decoration: const InputDecoration(labelText: 'Not (isteğe bağlı)')),
                     ),
                   ],
                 ),
-      bottomNavigationBar: c == null || _loadError != null
+      bottomNavigationBar: !_ready || _loadError != null
           ? null
           : SubmitBar(label: 'Vakayı kaydet', saving: _saving, missing: _missing, onPressed: _submit),
     );

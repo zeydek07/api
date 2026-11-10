@@ -33,7 +33,7 @@ class DeliveryDocument
             'd' => $delivery,
             'company' => config('app.company'),
             'signature' => ProofImage::dataUri($delivery->signature_path, 600),
-            'photo' => ProofImage::dataUri($delivery->photo_path, 1000),
+            'photos' => \App\Support\ProofPhotos::forPdf($delivery),
         ])->setPaper('a4')->setOption('isFontSubsettingEnabled', true)->output();
     }
 

@@ -44,7 +44,7 @@ class _CasesPageState extends State<CasesPage> with SingleTickerProviderStateMix
   Future<void> _load() async {
     try {
       final results = await Future.wait([
-        for (final scope in _lists.keys) _api.get('cases', {'scope': scope, 'per_page': 100}),
+        for (final scope in _lists.keys) _api.get('cases', {'scope': scope, 'mine': 1, 'per_page': 100}),
       ]);
       if (!mounted) return;
       setState(() {
@@ -117,6 +117,13 @@ class _CasesPageState extends State<CasesPage> with SingleTickerProviderStateMix
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vakalarım'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => _open(const CasePlanPage(emergency: true)),
+            icon: Icon(Icons.bolt, color: Colors.orange.shade800),
+            label: const Text('Acil vaka'),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           tabs: [
@@ -143,7 +150,12 @@ class _CasesPageState extends State<CasesPage> with SingleTickerProviderStateMix
                       child: Text('Kaydı bekleyen eski vakalar', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red.shade700)),
                     ),
                     for (final c in overdue) _card(c, showDate: true),
-                    const Padding(padding: EdgeInsets.fromLTRB(20, 12, 20, 4), child: Text('Bugün', style: TextStyle(fontWeight: FontWeight.w600))),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                      child: today.isEmpty
+                          ? Text('Bugün planlı vaka yok.', style: hint)
+                          : const Text('Bugün', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
                   ],
                   for (final c in today) _card(c),
                 ], 'Bugün planlı vaka yok. Sağ alttan yeni vaka planlayabilirsiniz.'),

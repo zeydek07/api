@@ -86,6 +86,8 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::post('deliveries', [DeliveryController::class, 'store'])->middleware(['permission:deliveries.create', 'throttle:usage']);
     Route::get('deliveries/{id}/pdf', [DeliveryController::class, 'pdf'])->whereNumber('id')->middleware($seeDeliveries);
     Route::post('deliveries/{id}/email', [DeliveryController::class, 'email'])->whereNumber('id')->middleware([$seeDeliveries, 'throttle:usage']);
+    Route::post('deliveries/{id}/photos', [DeliveryController::class, 'addPhotos'])->whereNumber('id')->middleware(['permission:deliveries.create', 'throttle:usage']);
+    Route::get('deliveries/{id}/photos/{photoId}', [DeliveryController::class, 'photo'])->whereNumber(['id', 'photoId'])->middleware($seeDeliveries);
     Route::post('deliveries/{id}/cancel', [DeliveryController::class, 'cancel'])->whereNumber('id')->middleware('permission:deliveries.cancel');
 
     // Vakalar: planla → ürünleri kaydet → onayla → faturala
@@ -94,8 +96,13 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::get('cases', [SurgeryCaseController::class, 'index'])->middleware($seeCases);
     Route::get('cases/{id}', [SurgeryCaseController::class, 'show'])->whereNumber('id')->middleware($seeCases);
     Route::post('cases', [SurgeryCaseController::class, 'store'])->middleware($planCases);
+    Route::post('cases/unplanned', [SurgeryCaseController::class, 'recordUnplanned'])->middleware([$planCases, 'throttle:usage']);
+    Route::get('cases/transfer-targets', [SurgeryCaseController::class, 'transferTargets'])->middleware($planCases);
     Route::put('cases/{id}', [SurgeryCaseController::class, 'update'])->whereNumber('id')->middleware($planCases);
     Route::post('cases/{id}/record', [SurgeryCaseController::class, 'record'])->whereNumber('id')->middleware([$planCases, 'throttle:usage']);
+    Route::post('cases/{id}/transfer', [SurgeryCaseController::class, 'transfer'])->whereNumber('id')->middleware($planCases);
+    Route::post('cases/{id}/photos', [SurgeryCaseController::class, 'addPhotos'])->whereNumber('id')->middleware([$planCases, 'throttle:usage']);
+    Route::get('cases/{id}/photos/{photoId}', [SurgeryCaseController::class, 'photo'])->whereNumber(['id', 'photoId'])->middleware($seeCases);
     Route::post('cases/{id}/approve', [SurgeryCaseController::class, 'approve'])->whereNumber('id')->middleware('permission:cases.approve');
     Route::post('cases/{id}/cancel', [SurgeryCaseController::class, 'cancel'])->whereNumber('id')->middleware($planCases);
     Route::get('cases/{id}/pdf', [SurgeryCaseController::class, 'pdf'])->whereNumber('id')->middleware($seeCases);

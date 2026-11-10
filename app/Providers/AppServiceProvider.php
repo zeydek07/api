@@ -5,7 +5,10 @@ namespace App\Providers;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
+use App\Models\Delivery;
+use App\Models\SurgeryCase;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\RateLimiter;
@@ -20,6 +23,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Fotoğraf kayıtlarında sınıf adı yerine kısa ad tutulur (yalnızca bu modeller için)
+        Relation::morphMap(['surgery_case' => SurgeryCase::class, 'delivery' => Delivery::class]);
+
         // Swagger dokümanında tüm uç noktalar Bearer token ister.
         Scramble::configure()
             ->routes(fn (Route $route) => str_starts_with($route->uri, 'api/') && ! $route->isFallback)

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -45,6 +46,20 @@ class Api {
       _send('POST', path, body: body, headers: headers);
 
   Future<dynamic> put(String path, Object? body) => _send('PUT', path, body: body);
+
+  /// Görsel gibi ikili içerik (token'lı)
+  Future<Uint8List> getBytes(String path) async {
+    final http.Response res;
+    try {
+      res = await _client.get(Uri.parse('$apiUrl/$path'), headers: {
+        if (_token != null) 'Authorization': 'Bearer $_token',
+      }).timeout(const Duration(seconds: 30));
+    } catch (_) {
+      throw ApiException('Sunucuya ulaşılamadı. İnternet bağlantınızı kontrol edin.');
+    }
+    if (res.statusCode != 200) throw ApiException('Dosya alınamadı (${res.statusCode}).', res.statusCode);
+    return res.bodyBytes;
+  }
 
   Future<dynamic> _send(
     String method,

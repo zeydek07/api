@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * Konsinye teslimat belgesi.
@@ -35,7 +36,7 @@ class Delivery extends Model
 
     protected $hidden = ['signature_path', 'photo_path'];
 
-    protected $appends = ['has_signature', 'has_photo', 'location_status'];
+    protected $appends = ['has_signature', 'location_status'];
 
     protected function casts(): array
     {
@@ -58,11 +59,6 @@ class Delivery extends Model
     public function getLocationStatusAttribute(): string
     {
         return $this->latitude !== null ? 'ok' : 'missing';
-    }
-
-    public function getHasPhotoAttribute(): bool
-    {
-        return (bool) $this->photo_path;
     }
 
     public function hospital(): BelongsTo
@@ -104,5 +100,11 @@ class Delivery extends Model
     public function lines(): HasMany
     {
         return $this->movements()->whereIn('type', [StockMovement::TYPE_CONSIGN_IN, StockMovement::TYPE_RETURN_IN]);
+    }
+
+    /** Belgeye eklenen fotoğraflar (kullanım formu, ürün etiketi...) */
+    public function photos(): MorphMany
+    {
+        return $this->morphMany(ProofPhoto::class, 'owner')->orderBy('id');
     }
 }

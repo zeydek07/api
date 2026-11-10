@@ -406,3 +406,84 @@ export class EmailCaseDialog {
     });
   }
 }
+
+interface TransferTarget {
+  id: number;
+  name: string;
+  email: string;
+  is_me: boolean;
+}
+
+/** Planlanmış vakayı başka personele devretme */
+@Component({
+  imports: [FormsModule, ModalFrame],
+  template: `
+    <app-modal title="Vakayı devret" [subtitle]="data.number">
+      <div class="space-y-3">
+        <p class="text-sm text-muted">Mevcut sorumlu: <strong class="text-ink">{{ data.user?.name }}</strong>. Devir vaka geçmişine yazılır.</p>
+        <div>
+          <label class="label" for="tc-user">Devredilecek kişi *</label>
+          <select id="tc-user" class="select" [(ngModel)]="userId" [disabled]="loading()">
+            <option [ngValue]="null">{{ loading() ? 'Yükleniyor…' : '— Kişi seçin —' }}</option>
+            @for (t of targets(); track t.id) {
+              <option [ngValue]="t.id">{{ t.name }}{{ t.is_me ? ' (ben)' : '' }}</option>
+            }
+          </select>
+        </div>
+        <div>
+          <label class="label" for="tc-note">Not</label>
+          <textarea id="tc-note" class="textarea" rows="2" maxlength="500" [(ngModel)]="note"></textarea>
+        </div>
+        @if (error()) {
+          <p class="form-error" role="alert">{{ error() }}</p>
+        }
+      </div>
+      <div modal-footer class="flex gap-2">
+        <button class="btn btn-secondary" (click)="ref.close(false)">Vazgeç</button>
+        <button class="btn btn-primary" [disabled]="!userId || saving()" (click)="save()">{{ saving() ? 'Kaydediliyor…' : 'Kaydet' }}</button>
+      </div>
+    </app-modal>
+  `,
+})
+export class TransferCaseDialog {
+  protected readonly data = inject<SurgeryCase>(DIALOG_DATA);
+  protected readonly ref = inject<DialogRef<boolean>>(DialogRef);
+  private readonly http = inject(HttpClient);
+  private readonly toast = inject(ToastService);
+  protected userId: number | null = null;
+  protected note = '';
+  protected readonly targets = signal<TransferTarget[]>([]);
+  protected readonly loading = signal(true);
+  protected readonly saving = signal(false);
+  protected readonly error = signal('');
+
+  constructor() {
+    this.http.get<TransferTarget[]>(`${API_URL}/cases/transfer-targets`).subscribe({
+      next: (l) => {
+        this.targets.set(l.filter((t) => t.id !== this.data.user?.id));
+        this.loading.set(false);
+      },
+      error: (e) => {
+        this.error.set(errorMessage(e));
+        this.loading.set(false);
+      },
+    });
+  }
+
+  protected save(): void {
+    if (!this.userId || this.saving()) return;
+    this.saving.set(true);
+    this.error.set('');
+    const body = { user_id: this.userId, note: this.note.trim() || null };
+    this.http.post<{ message: string }>(`${API_URL}/cases/${this.data.id}/transfer`, body).subscribe({
+      next: (r) => {
+        this.toast.success(r.message);
+        this.ref.close(true);
+      },
+      error: (e) => {
+        this.error.set(errorMessage(e));
+        this.saving.set(false);
+      },
+    });
+  }
+}
