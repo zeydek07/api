@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -30,7 +32,10 @@ class AuthController extends Controller
 
         $user = User::where('email', $data['email'])->first();
 
-        if (! $user || ! Hash::check($data['password'], $user->password)) {
+        // Kullanıcı yoksa da şifre kontrolü çalışır; aksi halde yanıt süresi e-postanın kayıtlı olmadığını ele verir.
+        $passwordOk = Hash::check($data['password'], $user?->password ?? $this->dummyHash());
+
+        if (! $user || ! $passwordOk) {
             throw ValidationException::withMessages(['email' => 'E-posta veya şifre hatalı.']);
         }
 
@@ -90,6 +95,14 @@ class AuthController extends Controller
         $user->tokens()->where('id', '!=', $user->currentAccessToken()->id)->delete();
 
         return response()->json(['message' => 'Şifre güncellendi.']);
+    }
+
+    /** Gerçek şifrelerle aynı maliyette üretilmiş, hiçbir şifreyle eşleşmeyen hash (bir kez üretilip saklanır). */
+    private function dummyHash(): string
+    {
+        $rounds = config('hashing.bcrypt.rounds');
+
+        return Cache::rememberForever("auth.dummy-hash.{$rounds}", fn () => Hash::make(Str::random(40)));
     }
 
     /** Mobil uygulama ve panel hangi sayfaları göstereceğine bu listeye bakarak karar verir. */

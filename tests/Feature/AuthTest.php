@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
+use Mockery;
 
 class AuthTest extends ApiTestCase
 {
@@ -52,6 +54,22 @@ class AuthTest extends ApiTestCase
 
         $this->postJson('/api/auth/login', ['email' => $user->email, 'password' => 'yanlis', 'device_name' => 'x'])
             ->assertStatus(422);
+    }
+
+    /**
+     * Zamanlama saldırısı: e-posta kayıtlı olmasa da şifre kontrolü (bcrypt) çalışmalı.
+     * Aksi halde yanıt ~200 ms daha hızlı gelir ve e-postanın kayıtlı olmadığı süreden anlaşılır.
+     */
+    public function test_unknown_email_still_runs_password_check(): void
+    {
+        $real = app('hash');
+        $spy = Mockery::mock($real); // gerçek hasher'ı sarar; diğer çağrılar (make vb.) aynen ona gider
+        $spy->shouldReceive('check')->once()->andReturnUsing(fn (...$args) => $real->check(...$args));
+        Hash::swap($spy);
+
+        $this->postJson('/api/auth/login', ['email' => 'olmayan@ornek.com', 'password' => 'yanlis', 'device_name' => 'x'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.email.0', 'E-posta veya şifre hatalı.');
     }
 
     public function test_inactive_user_cannot_login(): void
