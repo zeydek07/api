@@ -9,9 +9,11 @@ use App\Models\Stock;
 use App\Models\StockMovement;
 use App\Models\SurgeryCase;
 use App\Models\SurgeryCaseItem;
+use App\Services\CaseService;
 use App\Services\StockService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class CaseTest extends ApiTestCase
 {
@@ -273,6 +275,64 @@ class CaseTest extends ApiTestCase
         $this->assertEquals(3, Stock::find($this->stockId($this->shelf, ['lot_number' => 'P-1']))->quantity);
         $this->assertEquals(2, Stock::find($this->stockId($this->bag, ['lot_number' => 'P-1']))->quantity);
         $this->assertSame(3, StockMovement::where('surgery_case_id', $case->id)->where('type', StockMovement::TYPE_CASE_CANCEL)->count());
+    }
+
+    /** Aynı anda iki iptal isteği: ikincisi kilitten önce "kaydedildi" durumunu okumuş olsa da stok ikinci kez geri eklenmez. */
+    public function test_concurrent_double_cancel_does_not_put_stock_back_twice(): void
+    {
+        // Yalnızca lot takipli ürün: seri numaralı ürün ikinci iptalde tesadüfen hata verip açığı gizler.
+        $case = $this->plan();
+        $this->withToken($this->tokenFor($this->rep))->postJson("/api/cases/{$case->id}/record", $this->recordPayload(['items' => [
+            ['stock_id' => $this->stockId($this->shelf, ['lot_number' => 'P-1']), 'quantity' => 1, 'status' => 'opened'],
+            ['stock_id' => $this->stockId($this->bag, ['lot_number' => 'P-1']), 'quantity' => 1, 'status' => 'used'],
+        ]]))->assertCreated();
+        $stale = SurgeryCase::find($case->id);   // ikinci isteğin kilitten önce okuduğu hali
+
+        $this->withToken($this->tokenFor($this->manager))->postJson("/api/cases/{$case->id}/cancel", ['reason' => 'İlk'])->assertOk();
+
+        try {
+            app(CaseService::class)->cancel($this->manager, $stale, 'İkinci');
+            $this->fail('İkinci iptal kabul edildi.');
+        } catch (ValidationException) {
+        }
+
+        $this->assertEquals(3, Stock::find($this->stockId($this->shelf, ['lot_number' => 'P-1']))->quantity);
+        $this->assertEquals(2, Stock::find($this->stockId($this->bag, ['lot_number' => 'P-1']))->quantity);
+        $this->assertSame(2, StockMovement::where('surgery_case_id', $case->id)->where('type', StockMovement::TYPE_CASE_CANCEL)->count());
+    }
+
+    /** İptal ile onay yarışırsa iptal edilmiş vaka "onaylandı" olup faturalamaya düşmez. */
+    public function test_approve_after_concurrent_cancel_is_rejected(): void
+    {
+        $case = $this->plan();
+        $this->withToken($this->tokenFor($this->rep))->postJson("/api/cases/{$case->id}/record", $this->recordPayload())->assertCreated();
+        $stale = SurgeryCase::find($case->id);
+
+        $this->withToken($this->tokenFor($this->manager))->postJson("/api/cases/{$case->id}/cancel", ['reason' => 'Yanlış'])->assertOk();
+
+        try {
+            app(CaseService::class)->approve($this->manager, $stale);
+            $this->fail('İptal edilmiş vaka onaylandı.');
+        } catch (ValidationException) {
+        }
+
+        $this->assertSame(SurgeryCase::CANCELLED, $case->fresh()->status);
+    }
+
+    /** Dört göz ilkesi: vakayı kaydeden kişi onu onaylayamaz; başka bir yönetici onaylar. */
+    public function test_recorder_cannot_approve_own_case(): void
+    {
+        $case = $this->plan([], $this->manager);
+        $mgr = $this->tokenFor($this->manager);
+        $this->withToken($mgr)->postJson("/api/cases/{$case->id}/record", $this->recordPayload(['items' => [
+            ['stock_id' => $this->stockId($this->shelf, ['serial_number' => 'SN-1']), 'quantity' => 1, 'status' => 'used'],
+        ]]))->assertCreated();
+
+        $this->withToken($mgr)->postJson("/api/cases/{$case->id}/approve")->assertForbidden();
+        $this->assertSame(SurgeryCase::RECORDED, $case->fresh()->status);
+
+        $this->withToken($this->tokenFor($this->userWithRole('yonetici')))->postJson("/api/cases/{$case->id}/approve")
+            ->assertOk()->assertJsonPath('case.status', 'approved');
     }
 
     public function test_lists_visibility_and_mobile_home(): void

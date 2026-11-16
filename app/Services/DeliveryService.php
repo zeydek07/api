@@ -149,12 +149,12 @@ class DeliveryService
      */
     public function cancel(User $user, Delivery $delivery, string $reason): Delivery
     {
-        if ($delivery->status !== Delivery::STATUS_COMPLETED) {
-            throw ValidationException::withMessages(['status' => 'Bu belge zaten iptal edilmiş.']);
-        }
-
         return DB::transaction(function () use ($user, $delivery, $reason) {
+            // Durum kilitten SONRA okunur: aynı anda gelen ikinci iptal ürünleri ikinci kez taşımasın.
             $delivery = Delivery::whereKey($delivery->id)->lockForUpdate()->firstOrFail();
+            if ($delivery->status !== Delivery::STATUS_COMPLETED) {
+                throw ValidationException::withMessages(['status' => 'Bu belge zaten iptal edilmiş.']);
+            }
             $isReturn = $delivery->type === Delivery::TYPE_RETURN;
             $where = $isReturn ? $delivery->vehicle : $delivery->location;   // ürünlerin şu an olması gereken yer
             $back = $isReturn ? $delivery->location : $delivery->vehicle;

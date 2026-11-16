@@ -7,10 +7,12 @@ use App\Models\Hospital;
 use App\Models\HospitalContact;
 use App\Models\Stock;
 use App\Models\StockMovement;
+use App\Services\DeliveryService;
 use App\Services\StockService;
 use App\Mail\DeliveryDocumentMail;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class DeliveryTest extends ApiTestCase
 {
@@ -203,6 +205,28 @@ class DeliveryTest extends ApiTestCase
         $this->assertSame(0.0, (float) Stock::where('warehouse_id', $this->location->id)->sum('quantity'));
         $this->assertSame(10.0, (float) Stock::where('warehouse_id', $this->bag->id)->sum('quantity'));
         $this->withToken($mgrToken)->postJson("/api/deliveries/{$delivery->id}/cancel", ['reason' => 'tekrar'])->assertStatus(422);
+    }
+
+    /** Aynı anda iki iptal isteği: ikincisi kilitten önce "tamamlandı" durumunu okumuş olsa da ürünler ikinci kez taşınmaz. */
+    public function test_concurrent_double_cancel_does_not_move_stock_twice(): void
+    {
+        $repToken = $this->tokenFor($this->rep);
+        $this->withToken($repToken)->postJson('/api/deliveries', $this->payload(['items' => [['stock_id' => $this->stockId('YAKIN'), 'quantity' => 2]]]))
+            ->assertCreated();
+        $first = Delivery::first();
+        $this->withToken($repToken)->postJson('/api/deliveries', $this->payload())->assertCreated();   // hastanede 5 YAKIN, araçta 0
+        $stale = Delivery::find($first->id);   // ikinci isteğin kilitten önce okuduğu hali
+
+        $this->withToken($this->tokenFor($this->manager))->postJson("/api/deliveries/{$first->id}/cancel", ['reason' => 'İlk'])->assertOk();
+
+        try {
+            app(DeliveryService::class)->cancel($this->manager, $stale, 'İkinci');
+            $this->fail('İkinci iptal kabul edildi.');
+        } catch (ValidationException) {
+        }
+
+        $this->assertSame(3.0, (float) Stock::find($this->stockId('YAKIN', $this->location))->quantity);
+        $this->assertSame(2.0, (float) Stock::find($this->stockId('YAKIN'))->quantity);
     }
 
     public function test_visibility(): void

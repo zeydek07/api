@@ -188,7 +188,7 @@ class SurgeryCaseController extends Controller
     public function approve(Request $request, int $id): JsonResponse
     {
         $case = self::scoped($request->user())->findOrFail($id);
-        $this->cases->approve($request->user(), $case);
+        $case = $this->cases->approve($request->user(), $case);   // servis kilitleyip yeniden okur; güncel hali döner
 
         return response()->json(['message' => "{$case->number} onaylandı; faturalanacaklara eklendi.", 'case' => $this->detail($case)]);
     }

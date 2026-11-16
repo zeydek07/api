@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Role;
+use Illuminate\Support\Facades\Hash;
 
 class PermissionTest extends ApiTestCase
 {
@@ -45,7 +46,7 @@ class PermissionTest extends ApiTestCase
     {
         $manager = $this->userWithRole('yonetici');
         $token = $this->tokenFor($manager);
-        $staff = $this->userWithRole('personel');
+        $staff = $this->userWithRole('personel', ['manager_id' => $manager->id]);
 
         $this->withToken($token)->putJson("/api/users/{$staff->id}", ['permissions' => ['roles.delete']])
             ->assertStatus(422);
@@ -56,6 +57,29 @@ class PermissionTest extends ApiTestCase
 
         $this->withToken($token)->putJson("/api/users/{$this->admin()->id}", ['name' => 'Ele geçirildi'])
             ->assertStatus(403);
+    }
+
+    /** Yönetici yalnızca kendi ekibini yönetir: başka personelin/yöneticinin şifresini değiştirip hesabını ele geçiremez. */
+    public function test_manager_can_only_manage_own_team(): void
+    {
+        $manager = $this->userWithRole('yonetici');
+        $token = $this->tokenFor($manager);
+        $own = $this->userWithRole('personel', ['manager_id' => $manager->id]);
+        $outsider = $this->userWithRole('depocu');
+        $peer = $this->userWithRole('yonetici');
+
+        $this->withToken($token)->putJson("/api/users/{$own->id}", ['name' => 'Ekip üyesi'])->assertOk();
+
+        foreach ([$outsider, $peer] as $target) {
+            $this->withToken($token)->putJson("/api/users/{$target->id}", ['password' => 'ElGecirdim123'])->assertForbidden();
+            $this->withToken($token)->putJson("/api/users/{$target->id}", ['manager_id' => $manager->id])->assertForbidden();
+            $this->withToken($token)->postJson("/api/users/{$target->id}/revoke-tokens")->assertForbidden();
+            $this->withToken($token)->deleteJson("/api/users/{$target->id}")->assertForbidden();
+            $this->assertTrue(Hash::check('secret-pass', $target->fresh()->password));
+        }
+
+        // Kendine depo/yetki atayamaz (kendi şifresini /auth/change-password ile değiştirir)
+        $this->withToken($token)->putJson("/api/users/{$manager->id}", ['warehouse_ids' => [$this->warehouse()->id]])->assertForbidden();
     }
 
     public function test_role_permissions_can_be_edited(): void

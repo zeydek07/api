@@ -154,10 +154,20 @@ class UserController extends Controller
         }
     }
 
+    /**
+     * Süper yönetici herkesi yönetir. Diğerleri yalnızca kendi ekibini (kendisine bağlı personel ve onların altındakiler);
+     * böylece başka bir yöneticinin/depocunun şifresini değiştirip hesabını ele geçiremez, kendine depo/yetki atayamaz.
+     */
     private function guardTarget(User $actor, User $target): void
     {
-        if ($target->isSuperAdmin() && ! $actor->isSuperAdmin()) {
+        if ($actor->isSuperAdmin()) {
+            return;
+        }
+        if ($target->isSuperAdmin()) {
             abort(response()->json(['message' => 'Süper yönetici hesabını yalnızca süper yönetici değiştirebilir.'], 403));
+        }
+        if ($actor->is($target) || ! in_array($target->id, $actor->teamUserIds(), true)) {
+            abort(response()->json(['message' => 'Yalnızca kendi ekibinizdeki personeli yönetebilirsiniz.'], 403));
         }
     }
 

@@ -358,13 +358,22 @@ class CaseService
 
     public function approve(User $user, SurgeryCase $case): SurgeryCase
     {
-        if ($case->status !== SurgeryCase::RECORDED) {
-            throw ValidationException::withMessages(['status' => 'Yalnızca ürünleri kaydedilmiş, onay bekleyen vaka onaylanabilir.']);
+        // Dört göz ilkesi: kaydı yapan kendi vakasını onaylayamaz (süper yönetici hariç; onun üstünde onaylayan yok).
+        if ((int) $case->recorded_by === $user->id && ! $user->isSuperAdmin()) {
+            abort(response()->json(['message' => 'Kendi kaydettiğiniz vakayı onaylayamazsınız; başka bir yönetici onaylamalı.'], 403));
         }
-        $case->update(['status' => SurgeryCase::APPROVED, 'approved_at' => now(), 'approved_by' => $user->id]);
-        $this->event($case, $user, 'approved');
 
-        return $case;
+        return DB::transaction(function () use ($user, $case) {
+            // Durum kilitten sonra okunur: aynı anda yapılan bir iptal, iptal edilmiş vakanın onaylanmasına yol açmasın.
+            $case = SurgeryCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
+            if ($case->status !== SurgeryCase::RECORDED) {
+                throw ValidationException::withMessages(['status' => 'Yalnızca ürünleri kaydedilmiş, onay bekleyen vaka onaylanabilir.']);
+            }
+            $case->update(['status' => SurgeryCase::APPROVED, 'approved_at' => now(), 'approved_by' => $user->id]);
+            $this->event($case, $user, 'approved');
+
+            return $case;
+        });
     }
 
     /**
@@ -373,18 +382,18 @@ class CaseService
      */
     public function cancel(User $user, SurgeryCase $case, string $reason): SurgeryCase
     {
-        if ($case->status === SurgeryCase::CANCELLED) {
-            throw ValidationException::withMessages(['status' => 'Vaka zaten iptal edilmiş.']);
-        }
-        if ($case->status !== SurgeryCase::PLANNED && ! $user->hasPermission('cases.approve')) {
-            abort(response()->json(['message' => 'Kaydedilmiş vakayı yalnızca yönetici iptal edebilir.', 'required_permission' => 'cases.approve'], 403));
-        }
-        if ($case->status === SurgeryCase::PLANNED) {
-            $this->ensureEditable($user, $case);
-        }
-
         return DB::transaction(function () use ($user, $case, $reason) {
+            // Tüm kontroller kilitten SONRA: aynı anda gelen ikinci iptal "zaten iptal" görür, stok iki kez geri eklenmez.
             $case = SurgeryCase::whereKey($case->id)->lockForUpdate()->firstOrFail();
+            if ($case->status === SurgeryCase::CANCELLED) {
+                throw ValidationException::withMessages(['status' => 'Vaka zaten iptal edilmiş.']);
+            }
+            if ($case->status !== SurgeryCase::PLANNED && ! $user->hasPermission('cases.approve')) {
+                abort(response()->json(['message' => 'Kaydedilmiş vakayı yalnızca yönetici iptal edebilir.', 'required_permission' => 'cases.approve'], 403));
+            }
+            if ($case->status === SurgeryCase::PLANNED) {
+                $this->ensureEditable($user, $case);
+            }
             if ($case->items()->whereNotNull('invoice_number')->exists()) {
                 throw ValidationException::withMessages(['status' => 'Faturalanmış satırı olan vaka iptal edilemez; önce faturayı geri alın.']);
             }
