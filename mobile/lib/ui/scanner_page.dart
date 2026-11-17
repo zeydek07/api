@@ -55,7 +55,7 @@ class _ScannerPageState extends State<ScannerPage> {
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'ör. (01)08691234567893(17)271231(10)LOT42'),
+          decoration: const InputDecoration(hintText: 'ör. (01)08691234567890(17)271231(10)LOT42'),
           onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
         actions: [

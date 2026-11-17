@@ -31,6 +31,13 @@ class _LookupPageState extends State<LookupPage> {
     final raw = await scanBarcode(context);
     if (raw == null || !mounted) return;
     final g = parseGs1(raw);
+    if (g.isEmpty) {
+      return setState(() {
+        _scanned = null;
+        _product = null;
+        _error = g.error ?? 'Karekod okunamadı.';
+      });
+    }
     setState(() {
       _scanned = g;
       _product = null;

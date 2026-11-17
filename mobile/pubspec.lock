@@ -309,6 +309,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.5"
+  gs1_barcode_parser:
+    dependency: "direct main"
+    description:
+      name: gs1_barcode_parser
+      sha256: "8fce2a8bc39a0ca438456a3c940370d8a7d1c8219283d5c304519feb2027bfa3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.2"
   gsettings:
     dependency: transitive
     description:

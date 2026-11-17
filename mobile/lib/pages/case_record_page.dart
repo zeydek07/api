@@ -158,7 +158,7 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
     final raw = await scanBarcode(context);
     if (raw == null || !mounted) return;
     final g = parseGs1(raw);
-    if (g.isEmpty) return showMessage(context, 'Karekod okunamadı.', error: true);
+    if (g.isEmpty) return showMessage(context, g.error ?? 'Karekod okunamadı.', error: true);
 
     final same = _rows.where((r) => r.product.matches(g.gtin, g.plain)).toList();
     if (same.isEmpty) return showMessage(context, 'Bu ürün bu hastanede ya da aracınızda yok.', error: true);

@@ -76,7 +76,7 @@ class _ReceivePageState extends State<ReceivePage> {
     final raw = await scanBarcode(context);
     if (raw == null || !mounted) return;
     final g = parseGs1(raw);
-    if (g.isEmpty) return showMessage(context, 'Karekod okunamadı.', error: true);
+    if (g.isEmpty) return showMessage(context, g.error ?? 'Karekod okunamadı.', error: true);
 
     setState(() => _busy = true);
     try {

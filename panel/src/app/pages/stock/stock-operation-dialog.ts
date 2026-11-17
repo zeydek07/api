@@ -82,7 +82,7 @@ export class StockOperationDialog {
     const g = parseGs1(raw);
     const code = g.gtin ?? g.plain;
     if (!code) {
-      this.scanMessage.set({ text: 'Karekod okunamadı.', error: true });
+      this.scanMessage.set({ text: g.error ?? 'Karekod okunamadı.', error: true });
       return;
     }
 

@@ -342,7 +342,7 @@ export class DeliveryPage implements OnInit {
     const gtin = g.gtin;
     const code = g.plain;
     if (!gtin && !code) {
-      this.scanMessage.set({ text: 'Karekod okunamadı.', error: true });
+      this.scanMessage.set({ text: g.error ?? 'Karekod okunamadı.', error: true });
       return;
     }
     const sameProduct = this.rows().filter(

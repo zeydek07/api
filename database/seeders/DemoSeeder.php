@@ -104,7 +104,7 @@ class DemoSeeder extends Seeder
             ['code' => sprintf('MED-%03d', $i + 1)],
             [
                 'name' => $p[0], 'category' => $p[1], 'brand' => $p[2], 'unit' => $p[3],
-                'min_stock_level' => $p[4], 'barcode' => $barcode = '8690'.str_pad((string) (100000000 + $i * 7919), 9, '0', STR_PAD_LEFT),
+                'min_stock_level' => $p[4], 'barcode' => $barcode = self::ean13('8690'.str_pad((string) (10000000 + $i * 7919), 8, '0', STR_PAD_LEFT)),
                 'gtin' => '0'.$barcode, // karekoddaki 14 haneli ürün numarası
                 'tracking' => Product::TRACKING_LOT,
                 'description' => "{$p[1]} grubunda örnek ürün.",
@@ -307,5 +307,16 @@ class DemoSeeder extends Seeder
 
             return $i;
         }, $items), fn ($i) => $i['quantity'] > 0));
+    }
+
+    /** 12 haneye GS1 mod-10 kontrol hanesini ekler (mobil/panel karekod okuyucu hatalı GTIN'i reddeder) */
+    private static function ean13(string $digits12): string
+    {
+        $sum = 0;
+        foreach (str_split(strrev($digits12)) as $i => $d) {
+            $sum += (int) $d * ($i % 2 === 0 ? 3 : 1);
+        }
+
+        return $digits12.((10 - $sum % 10) % 10);
     }
 }

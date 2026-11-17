@@ -40,7 +40,7 @@ class StockCart {
   /// Okutulan karekodu işler; ekrana yazılacak mesajı ve hata olup olmadığını döndürür.
   (String, bool) scan(String raw, {required String notHere}) {
     final g = parseGs1(raw);
-    if (g.isEmpty) return ('Karekod okunamadı.', true);
+    if (g.isEmpty) return (g.error ?? 'Karekod okunamadı.', true);
 
     final same = rows.where((r) => r.product.matches(g.gtin, g.plain)).toList();
     if (same.isEmpty) return (notHere, true);

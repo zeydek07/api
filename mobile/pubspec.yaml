@@ -43,6 +43,7 @@ dependencies:
   signature: ^6.4.0
   uuid: ^4.6.0
   image_picker: ^1.2.4
+  gs1_barcode_parser: ^1.1.2
 
 dev_dependencies:
   flutter_test:

@@ -10,10 +10,10 @@ test.describe('Stok (yönetici)', () => {
     await page.getByRole('button', { name: /Stok girişi/ }).click();
     await page.locator('#op-wh').selectOption({ label: 'Merkez Depo' });
 
-    // Örnek veride MED-001 "Steril Gazlı Bez 10x10 cm" ürününün GTIN'i 08690100000000
+    // Örnek veride MED-001 "Steril Gazlı Bez 10x10 cm" ürününün GTIN'i 08690100000004
     const scan = page.locator('#op-scan');
     for (let i = 0; i < 2; i++) {
-      await scan.fill('(01)08690100000000(17)301231(10)E2E-LOT-1');
+      await scan.fill('(01)08690100000004(17)301231(10)E2E-LOT-1');
       await scan.press('Enter');
     }
     await expect(page.getByText('✓ Steril Gazlı Bez 10x10 cm · LOT E2E-LOT-1 · SKT 2030-12-31')).toBeVisible();
@@ -35,9 +35,17 @@ test.describe('Stok (yönetici)', () => {
   test('tanımsız karekod anlaşılır uyarı verir', async ({ page }) => {
     await page.goto('/stok');
     await page.getByRole('button', { name: /Stok girişi/ }).click();
-    await page.locator('#op-scan').fill('(01)09999999999999(10)X');
+    await page.locator('#op-scan').fill('(01)09999999999994(10)X');
     await page.locator('#op-scan').press('Enter');
     await expect(page.getByText(/hiçbir ürüne tanımlı değil/)).toBeVisible();
+  });
+
+  test('kontrol hanesi tutmayan karekod reddedilir', async ({ page }) => {
+    await page.goto('/stok');
+    await page.getByRole('button', { name: /Stok girişi/ }).click();
+    await page.locator('#op-scan').fill('(01)09999999999999(10)X');
+    await page.locator('#op-scan').press('Enter');
+    await expect(page.getByText(/kontrol hanesi tutmuyor/)).toBeVisible();
   });
 
   test('SKT filtresi yalnızca süresi yaklaşan lotları gösterir', async ({ page }) => {
