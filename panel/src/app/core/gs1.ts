@@ -23,6 +23,105 @@ export interface Gs1Data {
   plain?: string;
   /** Barkod okundu ama güvenilmez (kontrol hanesi tutmuyor vb.); kullanıcıya gösterilir */
   error?: string;
+  /** HIBC ürün barkodunun kontrol karakteri. Ayrı basılmış lot barkodu bunu bağ karakteri olarak taşır. */
+  hibcCheck?: string;
+  /** Ayrı basılmış HIBC lot/SKT barkodunun bağ karakteri (ait olduğu ürün barkodunun kontrol karakteri) */
+  hibcLink?: string;
+  /** Lot barkodu beklenmeden devam edilsin (ürün barkodu ikinci kez okutuldu) */
+  linkWaived?: boolean;
+}
+
+/** Yalnızca ürün kimliği olan HIBC barkodu; lot/SKT ayrı barkodda olabilir */
+export function isHibcPrimaryOnly(g: Gs1Data): boolean {
+  return g.hibcCheck !== undefined && !g.lot && !g.serial && !g.expiry;
+}
+
+/** HIBC ürün barkodu okundu, aynı etiketteki lot/SKT barkodu bekleniyor */
+export function hibcWaitText(name: string): string {
+  return `${name} okundu. Şimdi aynı etiketteki lot/SKT barkodunu okutun (lot barkodu yoksa ürün barkodunu tekrar okutun).`;
+}
+
+/**
+ * HIBC ürün ve lot/SKT barkodları ayrı basıldığında iki okutmayı birleştirir (sıra fark etmez).
+ * İki barkodun aynı etikete ait olduğu bağ karakteriyle doğrulanır (ANSI/HIBC 2.6).
+ *
+ *   const g = pairing.feed(parseGs1(raw));
+ *   if (!g) → pairing.message göster (diğer yarı bekleniyor ya da eşleşmedi)
+ *   … ürünü bul …
+ *   if (pairing.holdIfNeeded(g, product.tracking)) → "şimdi lot barkodunu okutun"
+ */
+export class HibcPairing {
+  private primary?: Gs1Data;
+  private secondary?: Gs1Data;
+  /** feed() undefined döndürdüğünde ekranda gösterilecek mesaj */
+  message = '';
+  messageIsError = false;
+
+  get waiting(): boolean {
+    return !!this.primary || !!this.secondary;
+  }
+
+  clear(): void {
+    this.primary = undefined;
+    this.secondary = undefined;
+  }
+
+  feed(g: Gs1Data): Gs1Data | undefined {
+    this.message = '';
+    this.messageIsError = false;
+
+    if (g.hibcLink !== undefined) {
+      const p = this.primary;
+      this.secondary = undefined;
+      if (!p) {
+        this.secondary = g;
+        this.message = 'Lot/SKT okundu. Şimdi ürün barkodunu okutun.';
+        return undefined;
+      }
+      if (p.hibcCheck !== g.hibcLink) {
+        this.message = 'Bu lot/SKT barkodu okutulan ürüne ait değil. Aynı etiketteki lot barkodunu okutun.';
+        this.messageIsError = true;
+        return undefined;
+      }
+      this.primary = undefined;
+      return merge(p, g);
+    }
+
+    if (isHibcPrimaryOnly(g)) {
+      const s = this.secondary;
+      const held = this.primary;
+      this.clear();
+      if (s) {
+        if (s.hibcLink !== g.hibcCheck) {
+          this.message = 'Bu ürün barkodu önce okutulan lot/SKT barkoduna ait değil. İkisini aynı etiketten okutun.';
+          this.messageIsError = true;
+          return undefined;
+        }
+        return merge(g, s);
+      }
+      if (held && held.plain === g.plain) return { ...g, linkWaived: true }; // ikinci kez: lotsuz devam
+      return g;
+    }
+
+    this.clear();
+    return g;
+  }
+
+  /** Ürün lot/seri takipliyse ve sadece ürün barkodu okunduysa lot barkodunu bekle */
+  holdIfNeeded(g: Gs1Data, tracking: string | undefined): boolean {
+    if (!isHibcPrimaryOnly(g) || g.linkWaived || !tracking || tracking === 'none') return false;
+    this.primary = g;
+    return true;
+  }
+}
+
+function merge(primary: Gs1Data, secondary: Gs1Data): Gs1Data {
+  const out: Gs1Data = { plain: primary.plain };
+  if (secondary.lot) out.lot = secondary.lot;
+  if (secondary.serial) out.serial = secondary.serial;
+  if (secondary.expiry) out.expiry = secondary.expiry;
+  if (secondary.produced) out.produced = secondary.produced;
+  return out;
 }
 
 const GS = '\x1d';
@@ -179,12 +278,13 @@ function parseHibc(s: string, now: Date): Gs1Data {
     const sec = primary.slice(0, -1);
     if (sec.startsWith('$') || /^\d{5}/.test(sec)) {
       hibcSecondary(sec, out, now);
-      return { ...out, error: 'Bu barkodda sadece lot/SKT var. Önce ürün barkodunu okutun.' };
+      return { ...out, hibcLink: primary.at(-1) };
     }
     return { plain: s.trim() };
   }
 
   out.plain = `+${primary}`;
+  if (secondary === undefined) out.hibcCheck = s.at(-1);
   if (secondary !== undefined) hibcSecondary(secondary, out, now);
   for (const extra of extras) {
     const m = /^(14|16)D(\d{4})(\d{2})(\d{2})$/.exec(extra);

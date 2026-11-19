@@ -147,7 +147,7 @@ test.describe.serial('Vaka döngüsü: planla, kaydet, onayla, faturala (yöneti
     let row = consignment.rows.find(usable);
     if (!row) {
       // Örnek veride bu hastanenin rafı boş olabilir: yönetici (süper yönetici) herhangi bir iç depodan düşebilir
-      const all = await apiGet<{ data: (StockRow & { warehouse: { type: string } })[] }>(page, '/stock?per_page=100');
+      const all = await apiGet<{ data: (StockRow & { warehouse: { type: string } })[] }>(page, '/stocks?per_page=100');
       row = all.data.find((x) => x.warehouse.type !== 'consignment' && usable(x));
     }
     expect(row, 'kaydedilecek ürün bulunmalı').toBeTruthy();
@@ -219,7 +219,7 @@ test.describe.serial('Vaka döngüsü: planla, kaydet, onayla, faturala (yöneti
     const usable = (x: StockRow) => Number(x.quantity) >= 1 && (!x.expiry_date || x.expiry_date >= today);
     let row = consignment.rows.find(usable);
     if (!row) {
-      const all = await apiGet<{ data: (StockRow & { warehouse: { type: string } })[] }>(page, '/stock?per_page=100');
+      const all = await apiGet<{ data: (StockRow & { warehouse: { type: string } })[] }>(page, '/stocks?per_page=100');
       row = all.data.find((x) => x.warehouse.type !== 'consignment' && usable(x));
     }
     expect(row, 'kaydedilecek ürün bulunmalı').toBeTruthy();

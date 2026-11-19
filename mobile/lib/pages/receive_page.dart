@@ -47,6 +47,9 @@ class _ReceivePageState extends State<ReceivePage> {
   bool _saving = false;
   bool _busy = false;
 
+  /// Ayrı basılmış HIBC ürün + lot barkodlarını birleştirir
+  final _pairing = HibcPairing();
+
   @override
   void initState() {
     super.initState();
@@ -75,7 +78,8 @@ class _ReceivePageState extends State<ReceivePage> {
   Future<void> _scan() async {
     final raw = await scanBarcode(context);
     if (raw == null || !mounted) return;
-    final g = parseGs1(raw);
+    final g = _pairing.feed(parseGs1(raw));
+    if (g == null) return showMessage(context, _pairing.message!, error: _pairing.messageIsError);
     if (g.isEmpty) return showMessage(context, g.error ?? 'Karekod okunamadı.', error: true);
 
     setState(() => _busy = true);
@@ -83,6 +87,7 @@ class _ReceivePageState extends State<ReceivePage> {
       final product = await _findProduct(g);
       if (!mounted) return;
       if (product == null) return showMessage(context, 'Bu barkoda ait ürün kartı yok. Önce panelden ürünü tanımlayın.', error: true);
+      if (_pairing.holdIfNeeded(g, product.tracking)) return showMessage(context, hibcWaitText(product.name));
       _addScanned(product, g);
     } on ApiException catch (e) {
       if (mounted) showMessage(context, e.message, error: true);

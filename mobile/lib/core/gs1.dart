@@ -31,7 +31,101 @@ class Gs1Data {
   /// Barkod okundu ama güvenilmez (kontrol hanesi tutmuyor vb.); kullanıcıya gösterilir
   String? error;
 
+  /// HIBC ürün barkodunun kontrol karakteri. Ayrı basılmış lot barkodu bunu bağ karakteri olarak taşır.
+  String? hibcCheck;
+
+  /// Ayrı basılmış HIBC lot/SKT barkodunun bağ karakteri (ait olduğu ürün barkodunun kontrol karakteri)
+  String? hibcLink;
+
+  /// Lot barkodu beklenmeden devam edilsin (ürün barkodu ikinci kez okutuldu)
+  bool linkWaived = false;
+
   bool get isEmpty => gtin == null && plain == null;
+
+  /// Yalnızca ürün kimliği olan HIBC barkodu; lot/SKT ayrı barkodda olabilir
+  bool get isHibcPrimaryOnly => hibcCheck != null && lot == null && serial == null && expiry == null;
+}
+
+/// HIBC ürün barkodu okundu, aynı etiketteki lot/SKT barkodu bekleniyor
+String hibcWaitText(String name) =>
+    '$name okundu. Şimdi aynı etiketteki lot/SKT barkodunu okutun (lot barkodu yoksa ürün barkodunu tekrar okutun).';
+
+/// HIBC ürün ve lot/SKT barkodları ayrı basıldığında iki okutmayı birleştirir (sıra fark etmez).
+/// İki barkodun aynı etikete ait olduğu bağ karakteriyle doğrulanır (ANSI/HIBC 2.6).
+///
+///   final g = pairing.feed(parseGs1(raw));
+///   if (g == null) → pairing.message göster (diğer yarı bekleniyor ya da eşleşmedi)
+///   … ürünü bul …
+///   if (pairing.holdIfNeeded(g, product.tracking)) → "şimdi lot barkodunu okutun"
+class HibcPairing {
+  Gs1Data? _primary;
+  Gs1Data? _secondary;
+
+  /// feed() null döndürdüğünde ekranda gösterilecek mesaj
+  String? message;
+  bool messageIsError = false;
+
+  bool get waiting => _primary != null || _secondary != null;
+
+  void clear() {
+    _primary = null;
+    _secondary = null;
+  }
+
+  Gs1Data? feed(Gs1Data g) {
+    message = null;
+    messageIsError = false;
+
+    if (g.hibcLink != null) {
+      final p = _primary;
+      _secondary = null;
+      if (p == null) {
+        _secondary = g;
+        message = 'Lot/SKT okundu. Şimdi ürün barkodunu okutun.';
+        return null;
+      }
+      if (p.hibcCheck != g.hibcLink) {
+        message = 'Bu lot/SKT barkodu okutulan ürüne ait değil. Aynı etiketteki lot barkodunu okutun.';
+        messageIsError = true;
+        return null;
+      }
+      _primary = null;
+      return _merge(p, g);
+    }
+
+    if (g.isHibcPrimaryOnly) {
+      final s = _secondary;
+      final held = _primary;
+      clear();
+      if (s != null) {
+        if (s.hibcLink != g.hibcCheck) {
+          message = 'Bu ürün barkodu önce okutulan lot/SKT barkoduna ait değil. İkisini aynı etiketten okutun.';
+          messageIsError = true;
+          return null;
+        }
+        return _merge(g, s);
+      }
+      if (held != null && held.plain == g.plain) g.linkWaived = true; // ikinci kez: lotsuz devam
+      return g;
+    }
+
+    clear();
+    return g;
+  }
+
+  /// Ürün lot/seri takipliyse ve sadece ürün barkodu okunduysa lot barkodunu bekle
+  bool holdIfNeeded(Gs1Data g, String tracking) {
+    if (!g.isHibcPrimaryOnly || g.linkWaived || tracking == 'none') return false;
+    _primary = g;
+    return true;
+  }
+
+  Gs1Data _merge(Gs1Data primary, Gs1Data secondary) => Gs1Data()
+    ..plain = primary.plain
+    ..lot = secondary.lot
+    ..serial = secondary.serial
+    ..expiry = secondary.expiry
+    ..produced = secondary.produced;
 }
 
 const _gs = '\x1d';
@@ -162,12 +256,13 @@ Gs1Data _hibc(String s, DateTime now) {
     final secondary = primary.substring(0, primary.length - 1);
     if (secondary.startsWith(r'$') || RegExp(r'^\d{5}').hasMatch(secondary)) {
       _hibcSecondary(secondary, out, now);
-      return out..error = 'Bu barkodda sadece lot/SKT var. Önce ürün barkodunu okutun.';
+      return out..hibcLink = primary[primary.length - 1];
     }
     return out..plain = s.trim();
   }
 
   out.plain = '+$primary';
+  if (parts.length == 1) out.hibcCheck = s[s.length - 1];
   if (parts.length > 1) _hibcSecondary(parts[1], out, now);
   for (final extra in parts.skip(2)) {
     final m = RegExp(r'^(14|16)D(\d{4})(\d{2})(\d{2})$').firstMatch(extra);

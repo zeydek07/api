@@ -48,6 +48,9 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
 
   /// Hastanedeki ve araçtaki kullanılabilir stok satırları
   List<StockRow> _rows = [];
+
+  /// Ayrı basılmış HIBC ürün + lot barkodlarını birleştirir
+  final _pairing = HibcPairing();
   bool _rowsLoading = true;
   final List<_Line> _lines = [];
 
@@ -157,11 +160,13 @@ class _CaseRecordPageState extends State<CaseRecordPage> {
   Future<void> _scan() async {
     final raw = await scanBarcode(context);
     if (raw == null || !mounted) return;
-    final g = parseGs1(raw);
+    final g = _pairing.feed(parseGs1(raw));
+    if (g == null) return showMessage(context, _pairing.message!, error: _pairing.messageIsError);
     if (g.isEmpty) return showMessage(context, g.error ?? 'Karekod okunamadı.', error: true);
 
     final same = _rows.where((r) => r.product.matches(g.gtin, g.plain)).toList();
     if (same.isEmpty) return showMessage(context, 'Bu ürün bu hastanede ya da aracınızda yok.', error: true);
+    if (_pairing.holdIfNeeded(g, same.first.product.tracking)) return showMessage(context, hibcWaitText(same.first.product.name));
     var candidates = same;
     if (g.serial != null) {
       candidates = candidates.where((r) => r.serial == g.serial).toList();

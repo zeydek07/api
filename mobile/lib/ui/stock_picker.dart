@@ -27,9 +27,13 @@ class StockCart {
     }
   }
 
+  /// Ayrı basılmış HIBC ürün + lot barkodlarını birleştirir
+  final pairing = HibcPairing();
+
   void reset(List<StockRow> newRows) {
     rows = newRows;
     picked.clear();
+    pairing.clear();
   }
 
   List<(StockRow, double)> get lines =>
@@ -39,11 +43,13 @@ class StockCart {
 
   /// Okutulan karekodu işler; ekrana yazılacak mesajı ve hata olup olmadığını döndürür.
   (String, bool) scan(String raw, {required String notHere}) {
-    final g = parseGs1(raw);
+    final g = pairing.feed(parseGs1(raw));
+    if (g == null) return (pairing.message!, pairing.messageIsError);
     if (g.isEmpty) return (g.error ?? 'Karekod okunamadı.', true);
 
     final same = rows.where((r) => r.product.matches(g.gtin, g.plain)).toList();
     if (same.isEmpty) return (notHere, true);
+    if (pairing.holdIfNeeded(g, same.first.product.tracking)) return (hibcWaitText(same.first.product.name), false);
 
     var candidates = same;
     if (g.serial != null) {

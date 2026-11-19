@@ -30,4 +30,38 @@ test.describe('Ürün kartı (yönetici)', () => {
     await expect(page.getByText('Ürün kaydedildi.')).toBeVisible();
     expect(errors).toEqual([]);
   });
+
+  test('HIBC ürün ve lot barkodu ayrı okutulunca stok girişinde tek satırda birleşir', async ({ page }) => {
+    const errors = collectErrors(page);
+    // Barkod alanına HIBC ürün kimliği yazılır (GTIN yok)
+    await page.goto('/urunler');
+    await page.getByRole('button', { name: /Yeni ürün/ }).click();
+    await page.locator('#p-name').fill('E2E HIBC Plak');
+    await page.locator('#p-code').fill('E2E-HIBC-1');
+    await page.locator('#p-barcode').fill('+H123ABC01');
+    await page.locator('#p-tracking').selectOption('lot');
+    await page.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(page.getByText('Ürün kaydedildi.')).toBeVisible();
+
+    await page.goto('/stok');
+    await page.getByRole('button', { name: /Stok girişi/ }).click();
+    await page.locator('#op-wh').selectOption({ label: 'Merkez Depo' });
+    const scan = page.locator('#op-scan');
+
+    // Ürün barkodu: lot takipli olduğu için lot barkodu beklenir
+    await scan.fill('+H123ABC01C');
+    await scan.press('Enter');
+    await expect(page.getByText(/E2E HIBC Plak okundu\. Şimdi aynı etiketteki lot\/SKT barkodunu okutun/)).toBeVisible();
+
+    // Başka etiketin lot barkodu (bağ karakteri X) kabul edilmez
+    await scan.fill('+$$3271231LOT42X-');
+    await scan.press('Enter');
+    await expect(page.getByText(/okutulan ürüne ait değil/)).toBeVisible();
+
+    // Aynı etiketin lot barkodu: tek satır, lot ve SKT dolu
+    await scan.fill('+$$3271231LOT42CF');
+    await scan.press('Enter');
+    await expect(page.getByText('✓ E2E HIBC Plak · LOT LOT42 · SKT 2027-12-31')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
 });

@@ -21,6 +21,9 @@ class _LookupPageState extends State<LookupPage> {
   bool _loading = false;
   String? _error;
 
+  /// Ayrı basılmış HIBC ürün + lot barkodlarını birleştirir
+  final _pairing = HibcPairing();
+
   @override
   void initState() {
     super.initState();
@@ -30,7 +33,8 @@ class _LookupPageState extends State<LookupPage> {
   Future<void> _scan() async {
     final raw = await scanBarcode(context);
     if (raw == null || !mounted) return;
-    final g = parseGs1(raw);
+    final g = _pairing.feed(parseGs1(raw));
+    if (g == null) return showMessage(context, _pairing.message!, error: _pairing.messageIsError);
     if (g.isEmpty) {
       return setState(() {
         _scanned = null;
@@ -58,6 +62,10 @@ class _LookupPageState extends State<LookupPage> {
         _error = 'Bu barkoda ait ürün kartı bulunamadı.';
       } else {
         _product = Map<String, dynamic>.from(await _api.get('products/${found['id']}'));
+        // Ürün hemen gösterilir; ayrı lot barkodu da okutulursa o lot işaretlenir
+        if (_pairing.holdIfNeeded(g, '${found['tracking'] ?? 'none'}') && mounted) {
+          showMessage(context, hibcWaitText('${found['name']}'));
+        }
       }
     } on ApiException catch (e) {
       _error = e.message;

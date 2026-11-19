@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { API_URL, errorMessage, qty } from '../../core/api';
 import { AuthService } from '../../core/auth.service';
-import { parseGs1 } from '../../core/gs1';
+import { HibcPairing, hibcWaitText, parseGs1 } from '../../core/gs1';
 import { compressImage } from '../../core/image';
 import { CapturedLocation, LOCATION_ERROR_LABELS, capturePosition } from '../../core/location';
 import {
@@ -74,6 +74,8 @@ export class DeliveryPage implements OnInit {
   protected readonly cart = signal<Map<number, number>>(new Map());
   protected scanText = '';
   protected readonly scanMessage = signal<{ text: string; error: boolean } | null>(null);
+  /** Ayrı basılmış HIBC ürün + lot barkodlarını birleştirir */
+  private readonly pairing = new HibcPairing();
   // 5. Kanıt
   protected readonly signature = signal<string | null>(null);
   protected readonly photo = signal<string | null>(null);
@@ -337,8 +339,12 @@ export class DeliveryPage implements OnInit {
 
   /** Karekod: ürün + seri/lot eşleşen satıra 1 ekler; lot yoksa SKT'si en yakın uygun satıra */
   protected scan(): void {
-    const g = parseGs1(this.scanText);
+    const g = this.pairing.feed(parseGs1(this.scanText));
     this.scanText = '';
+    if (!g) {
+      this.scanMessage.set({ text: this.pairing.message, error: this.pairing.messageIsError });
+      return;
+    }
     const gtin = g.gtin;
     const code = g.plain;
     if (!gtin && !code) {
@@ -353,6 +359,11 @@ export class DeliveryPage implements OnInit {
         text: this.isReturn() ? 'Bu ürün seçili lokasyonda yok.' : 'Bu ürün aracınızda yok.',
         error: true,
       });
+      return;
+    }
+    const product = sameProduct[0].product;
+    if (product && this.pairing.holdIfNeeded(g, product.tracking)) {
+      this.scanMessage.set({ text: hibcWaitText(product.name), error: false });
       return;
     }
     let candidates = sameProduct;

@@ -133,11 +133,69 @@ void main() {
       expect(g.error, contains('kontrol'));
     });
 
-    test('tek başına ikincil barkod ürün kimliği içermez', () {
-      // sondan ikinci karakter bağ (link) karakteri, son karakter kontrol
-      final g = parseGs1('+\$\$3271231LOT42CF');
-      expect(g.isEmpty, isTrue);
-      expect(g.error, contains('ürün barkodunu'));
+    test('ayrı basılmış ürün ve lot barkodu tanınır', () {
+      final p = parseGs1('+H123ABC01C');
+      expect(p.isHibcPrimaryOnly, isTrue);
+      expect(p.hibcCheck, 'C');
+      // sondan ikinci karakter bağ (link) karakteri = ürün barkodunun kontrol karakteri
+      final s = parseGs1('+\$\$3271231LOT42CF');
+      expect(s.isEmpty, isTrue, reason: 'ürün kimliği yok');
+      expect(s.hibcLink, 'C');
+      expect(s.lot, 'LOT42');
+      expect(s.expiry, '2027-12-31');
+      expect(parseGs1('+H123ABC01/\$\$3271231LOT42E').isHibcPrimaryOnly, isFalse, reason: 'birleşik etiket');
+    });
+  });
+
+  group('HibcPairing', () {
+    const primary = '+H123ABC01C';
+    const secondary = '+\$\$3271231LOT42CF';
+
+    test('önce ürün sonra lot: lot takipli ürün bekletilir, ikisi birleşir', () {
+      final pair = HibcPairing();
+      final p = pair.feed(parseGs1(primary))!;
+      expect(pair.holdIfNeeded(p, 'lot'), isTrue);
+      final g = pair.feed(parseGs1(secondary))!;
+      expect(g.plain, '+H123ABC01');
+      expect(g.lot, 'LOT42');
+      expect(g.expiry, '2027-12-31');
+      expect(pair.waiting, isFalse);
+    });
+
+    test('önce lot sonra ürün', () {
+      final pair = HibcPairing();
+      expect(pair.feed(parseGs1(secondary)), isNull);
+      expect(pair.message, contains('ürün barkodunu okutun'));
+      expect(pair.messageIsError, isFalse);
+      final g = pair.feed(parseGs1(primary))!;
+      expect(g.plain, '+H123ABC01');
+      expect(g.lot, 'LOT42');
+      expect(pair.holdIfNeeded(g, 'lot'), isFalse, reason: 'zaten tamam');
+    });
+
+    test('bağ karakteri tutmazsa birleşmez, ürün beklemeye devam eder', () {
+      final pair = HibcPairing();
+      pair.holdIfNeeded(pair.feed(parseGs1(primary))!, 'lot');
+      expect(pair.feed(parseGs1('+\$\$3271231LOT42X-')), isNull);
+      expect(pair.message, contains('ait değil'));
+      expect(pair.messageIsError, isTrue);
+      expect(pair.feed(parseGs1(secondary))!.lot, 'LOT42');
+    });
+
+    test('lot barkodu yoksa ürün barkodu ikinci kez okutulunca lotsuz devam edilir', () {
+      final pair = HibcPairing();
+      expect(pair.holdIfNeeded(pair.feed(parseGs1(primary))!, 'lot'), isTrue);
+      final again = pair.feed(parseGs1(primary))!;
+      expect(again.lot, isNull);
+      expect(pair.holdIfNeeded(again, 'lot'), isFalse);
+    });
+
+    test('lot takibi olmayan ürün beklemez; başka barkod bekleyeni iptal eder', () {
+      final pair = HibcPairing();
+      expect(pair.holdIfNeeded(pair.feed(parseGs1(primary))!, 'none'), isFalse);
+      pair.holdIfNeeded(pair.feed(parseGs1(primary))!, 'lot');
+      expect(pair.feed(parseGs1('(01)08691234567890(10)A'))!.gtin, '08691234567890');
+      expect(pair.waiting, isFalse);
     });
   });
 
@@ -175,6 +233,28 @@ void main() {
     test('depoda olmayan ürün', () {
       final cart = StockCart()..reset([row(1, lot: 'A')]);
       expect(cart.scan('4006381333931', notHere: 'Aracınızda yok').$1, 'Aracınızda yok');
+    });
+
+    test('HIBC ayrı etiket: ürün okutulunca bekler, lot okutulunca o lot seçilir', () {
+      StockRow hibc(int id, String lot, String expiry) => StockRow({
+            'id': id,
+            'product_id': 2,
+            'quantity': '3',
+            'lot_number': lot,
+            'expiry_date': expiry,
+            'product': {'id': 2, 'name': 'Plak', 'barcode': '+H123ABC01', 'tracking': 'lot'},
+          });
+      final cart = StockCart()..reset([hibc(7, 'ERKEN', '2027-01-31'), hibc(8, 'LOT42', '2027-12-31')]);
+
+      final (wait, waitError) = cart.scan('+H123ABC01C', notHere: 'yok');
+      expect(waitError, isFalse);
+      expect(wait, contains('lot/SKT barkodunu okutun'));
+      expect(cart.picked, isEmpty);
+
+      final (done, doneError) = cart.scan('+\$\$3271231LOT42CF', notHere: 'yok');
+      expect(doneError, isFalse);
+      expect(done, contains('LOT42'));
+      expect(cart.picked, {8: 1}, reason: 'SKT\'si en yakın ERKEN değil, okutulan LOT42');
     });
   });
 }

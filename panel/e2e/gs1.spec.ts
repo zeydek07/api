@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { parseGs1 } from '../src/app/core/gs1';
+import { HibcPairing, isHibcPrimaryOnly, parseGs1 } from '../src/app/core/gs1';
 
 /**
  * Karekod çözücü birim testleri (tarayıcı açmaz). mobile/test/gs1_test.dart ile aynı örnekler:
@@ -57,7 +57,7 @@ test.describe('parseGs1 · GS1', () => {
 
 test.describe('parseGs1 · HIBC', () => {
   test('resmi örnek: +A123BJC5D6E71G', () => {
-    expect(parseGs1('+A123BJC5D6E71G')).toEqual({ plain: '+A123BJC5D6E71' });
+    expect(parseGs1('+A123BJC5D6E71G')).toEqual({ plain: '+A123BJC5D6E71', hibcCheck: 'G' });
   });
 
   test('ikincil veri biçimleri', () => {
@@ -69,12 +69,65 @@ test.describe('parseGs1 · HIBC', () => {
     expect(parseGs1('+H123ABC01/$$3271231LOT42/16D202501154').produced).toBe('2025-01-15');
   });
 
-  test('kontrol karakteri tutmazsa ya da ürün kimliği yoksa reddedilir', () => {
+  test('kontrol karakteri tutmazsa reddedilir', () => {
     const bad = parseGs1('+H123ABC01/$$3271231LOT42X');
     expect(bad.plain).toBeUndefined();
     expect(bad.error).toContain('kontrol');
-    const secondaryOnly = parseGs1('+$$3271231LOT42CF');
-    expect(secondaryOnly.plain).toBeUndefined();
-    expect(secondaryOnly.error).toContain('ürün barkodunu');
+  });
+
+  test('ayrı basılmış ürün ve lot barkodu tanınır', () => {
+    const p = parseGs1('+H123ABC01C');
+    expect(isHibcPrimaryOnly(p)).toBe(true);
+    expect(p.hibcCheck).toBe('C');
+    // sondan ikinci karakter bağ karakteri = ürün barkodunun kontrol karakteri
+    expect(parseGs1('+$$3271231LOT42CF')).toEqual({ hibcLink: 'C', lot: 'LOT42', expiry: '2027-12-31' });
+    expect(isHibcPrimaryOnly(parseGs1('+H123ABC01/$$3271231LOT42E'))).toBe(false);
+  });
+});
+
+test.describe('HibcPairing', () => {
+  const primary = '+H123ABC01C';
+  const secondary = '+$$3271231LOT42CF';
+
+  test('önce ürün sonra lot: lot takipli ürün bekletilir, ikisi birleşir', () => {
+    const pair = new HibcPairing();
+    expect(pair.holdIfNeeded(pair.feed(parseGs1(primary))!, 'lot')).toBe(true);
+    expect(pair.feed(parseGs1(secondary))).toEqual({ plain: '+H123ABC01', lot: 'LOT42', expiry: '2027-12-31' });
+    expect(pair.waiting).toBe(false);
+  });
+
+  test('önce lot sonra ürün', () => {
+    const pair = new HibcPairing();
+    expect(pair.feed(parseGs1(secondary))).toBeUndefined();
+    expect(pair.message).toContain('ürün barkodunu okutun');
+    expect(pair.messageIsError).toBe(false);
+    const g = pair.feed(parseGs1(primary))!;
+    expect(g.lot).toBe('LOT42');
+    expect(pair.holdIfNeeded(g, 'lot')).toBe(false);
+  });
+
+  test('bağ karakteri tutmazsa birleşmez, ürün beklemeye devam eder', () => {
+    const pair = new HibcPairing();
+    pair.holdIfNeeded(pair.feed(parseGs1(primary))!, 'lot');
+    expect(pair.feed(parseGs1('+$$3271231LOT42X-'))).toBeUndefined();
+    expect(pair.message).toContain('ait değil');
+    expect(pair.messageIsError).toBe(true);
+    expect(pair.feed(parseGs1(secondary))?.lot).toBe('LOT42');
+  });
+
+  test('lot barkodu yoksa ürün barkodu ikinci kez okutulunca lotsuz devam edilir', () => {
+    const pair = new HibcPairing();
+    expect(pair.holdIfNeeded(pair.feed(parseGs1(primary))!, 'lot')).toBe(true);
+    const again = pair.feed(parseGs1(primary))!;
+    expect(again.lot).toBeUndefined();
+    expect(pair.holdIfNeeded(again, 'lot')).toBe(false);
+  });
+
+  test('lot takibi olmayan ürün beklemez; başka barkod bekleyeni iptal eder', () => {
+    const pair = new HibcPairing();
+    expect(pair.holdIfNeeded(pair.feed(parseGs1(primary))!, 'none')).toBe(false);
+    pair.holdIfNeeded(pair.feed(parseGs1(primary))!, 'lot');
+    expect(pair.feed(parseGs1('(01)08691234567890(10)A'))?.gtin).toBe('08691234567890');
+    expect(pair.waiting).toBe(false);
   });
 });

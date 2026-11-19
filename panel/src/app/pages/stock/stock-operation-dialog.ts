@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { API_URL, errorMessage } from '../../core/api';
-import { parseGs1 } from '../../core/gs1';
+import { HibcPairing, hibcWaitText, parseGs1 } from '../../core/gs1';
 import { Product, Warehouse } from '../../core/models';
 import { ModalFrame } from '../../ui/modal-frame';
 import { ProductPicker } from '../../ui/product-picker';
@@ -46,6 +46,8 @@ export class StockOperationDialog {
   protected note = '';
   protected scanText = '';
   protected readonly scanMessage = signal<{ text: string; error: boolean } | null>(null);
+  /** Ayrı basılmış HIBC ürün + lot barkodlarını birleştirir */
+  private readonly pairing = new HibcPairing();
   protected readonly lines = signal<Line[]>([this.emptyLine()]);
   protected readonly saving = signal(false);
   protected readonly error = signal('');
@@ -79,7 +81,11 @@ export class StockOperationDialog {
   protected scan(): void {
     const raw = this.scanText;
     this.scanText = '';
-    const g = parseGs1(raw);
+    const g = this.pairing.feed(parseGs1(raw));
+    if (!g) {
+      this.scanMessage.set({ text: this.pairing.message, error: this.pairing.messageIsError });
+      return;
+    }
     const code = g.gtin ?? g.plain;
     if (!code) {
       this.scanMessage.set({ text: g.error ?? 'Karekod okunamadı.', error: true });
@@ -88,6 +94,10 @@ export class StockOperationDialog {
 
     this.http.get<Product>(`${API_URL}/products/barcode/${encodeURIComponent(code)}`).subscribe({
       next: (product) => {
+        if (this.pairing.holdIfNeeded(g, product.tracking)) {
+          this.scanMessage.set({ text: hibcWaitText(product.name), error: false });
+          return;
+        }
         const lot = g.lot ?? '';
         const serial = g.serial ?? '';
         const expiry = g.expiry ?? '';
