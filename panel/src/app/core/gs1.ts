@@ -120,9 +120,10 @@ function digitalLink(s: string): Record<string, string> | undefined {
   return out;
 }
 
-/** GS1 mod-10: sağdan itibaren 3,1,3,1… ağırlıkları */
-function gtinValid(gtin: string): boolean {
-  if (!/^\d{14}$/.test(gtin)) return false;
+/** GS1 mod-10: sağdan itibaren 3,1,3,1… ağırlıkları. GTIN-8/12/13/14 kabul eder. */
+export function gtinValid(value: string): boolean {
+  if (!/^\d{8,14}$/.test(value)) return false;
+  const gtin = value.padStart(14, '0');
   let sum = 0;
   for (let i = 0; i < 13; i++) sum += Number(gtin[12 - i]) * (i % 2 === 0 ? 3 : 1);
   return (10 - (sum % 10)) % 10 === Number(gtin[13]);

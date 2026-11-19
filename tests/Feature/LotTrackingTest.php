@@ -206,15 +206,32 @@ class LotTrackingTest extends ApiTestCase
     {
         $token = $this->adminToken();
         $this->withToken($token)->postJson('/api/products', [
-            'name' => 'Stent', 'code' => 'ST-1', 'gtin' => '8691234567893', 'tracking' => 'serial',
-        ])->assertCreated()->assertJsonPath('gtin', '08691234567893')->assertJsonPath('tracking', 'serial');
+            'name' => 'Stent', 'code' => 'ST-1', 'gtin' => '8691234567890', 'tracking' => 'serial',
+        ])->assertCreated()->assertJsonPath('gtin', '08691234567890')->assertJsonPath('tracking', 'serial');
 
         // Aynı GTIN 14 haneli yazılsa da tekrar kaydedilemez
-        $this->withToken($token)->postJson('/api/products', ['name' => 'X', 'code' => 'X-1', 'gtin' => '08691234567893'])
-            ->assertStatus(422)->assertJsonValidationErrors('gtin');
+        $this->withToken($token)->postJson('/api/products', ['name' => 'X', 'code' => 'X-1', 'gtin' => '08691234567890'])
+            ->assertStatus(422)->assertJsonValidationErrors(['gtin' => 'already been taken']);
 
-        $this->withToken($token)->getJson('/api/products/barcode/08691234567893')->assertOk()->assertJsonPath('code', 'ST-1');
-        $this->withToken($token)->getJson('/api/products/barcode/8691234567893')->assertOk()->assertJsonPath('code', 'ST-1');
+        $this->withToken($token)->getJson('/api/products/barcode/08691234567890')->assertOk()->assertJsonPath('code', 'ST-1');
+        $this->withToken($token)->getJson('/api/products/barcode/8691234567890')->assertOk()->assertJsonPath('code', 'ST-1');
+    }
+
+    public function test_gtin_check_digit_is_validated(): void
+    {
+        $token = $this->adminToken();
+        $post = fn (string $code, string $gtin) => $this->withToken($token)->postJson('/api/products', ['name' => 'Ürün', 'code' => $code, 'gtin' => $gtin]);
+
+        // Son hane (kontrol hanesi) yanlış: elle yazımda tek hane hatası yakalanır
+        $post('A-1', '8691234567893')->assertStatus(422)->assertJsonValidationErrors(['gtin' => 'kontrol hanesi']);
+        $post('A-2', '08691234567893')->assertStatus(422)->assertJsonValidationErrors(['gtin' => 'kontrol hanesi']);
+        // Geçerli GTIN-8, GTIN-12 (UPC), EAN-13, GTIN-14
+        $post('A-3', '96385074')->assertCreated()->assertJsonPath('gtin', '00000096385074');
+        $post('A-4', '036000291452')->assertCreated();
+        $post('A-5', '4006381333931')->assertCreated();
+        $post('A-6', '08691234567890')->assertCreated();
+        // Rakam dışı karakter yine reddedilir
+        $post('A-7', '869123456789X')->assertStatus(422)->assertJsonValidationErrors('gtin');
     }
 
     public function test_tracking_cannot_change_while_in_stock(): void

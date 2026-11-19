@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Rules\Gtin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -100,8 +101,8 @@ class ProductController extends Controller
             'name' => [$req, 'string', 'max:255'],
             'code' => [$req, 'string', 'max:100', Rule::unique('products', 'code')->ignore($product?->id)],
             'barcode' => ['nullable', 'string', 'max:100', Rule::unique('products', 'barcode')->ignore($product?->id)],
-            // Karekoddaki ürün numarası; 8-14 hane, 14'e tamamlanarak saklanır
-            'gtin' => ['nullable', 'digits_between:8,14', Rule::unique('products', 'gtin')->ignore($product?->id)],
+            // Karekoddaki ürün numarası; 8-14 hane, kontrol hanesi doğru, 14'e tamamlanarak saklanır
+            'gtin' => ['nullable', 'digits_between:8,14', new Gtin, Rule::unique('products', 'gtin')->ignore($product?->id)],
             'tracking' => ['sometimes', Rule::in(Product::TRACKINGS)],
             'category' => ['nullable', 'string', 'max:100'],
             'brand' => ['nullable', 'string', 'max:100'],

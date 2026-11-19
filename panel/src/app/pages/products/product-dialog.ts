@@ -1,9 +1,17 @@
 import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
 import { HttpClient } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { API_URL, errorMessage } from '../../core/api';
-import { parseGs1 } from '../../core/gs1';
+import { gtinValid, parseGs1 } from '../../core/gs1';
+
+/** Boş olabilir; doluysa 8-14 hane ve kontrol hanesi doğru (API'deki App\Rules\Gtin ile aynı) */
+function gtinValidator(control: AbstractControl<string>): ValidationErrors | null {
+  const value = control.value?.trim();
+  if (!value) return null;
+  if (!/^\d{8,14}$/.test(value)) return { gtinFormat: true };
+  return gtinValid(value) ? null : { gtinCheck: true };
+}
 import { Product, TRACKING_LABELS, Tracking } from '../../core/models';
 import { ModalFrame } from '../../ui/modal-frame';
 import { ToastService } from '../../ui/toast';
@@ -36,7 +44,11 @@ import { ToastService } from '../../ui/toast';
               (keydown.enter)="$event.preventDefault(); fillFromScan()"
               (blur)="fillFromScan()"
             />
-            <p class="hint">Karekod okutulunca ürün numarası kendiliğinden ayrılır.</p>
+            @if (gtinError()) {
+              <p class="form-error">{{ gtinError() }}</p>
+            } @else {
+              <p class="hint">Karekod okutulunca ürün numarası kendiliğinden ayrılır.</p>
+            }
           </div>
           <div>
             <label class="label" for="p-tracking">Takip türü</label>
@@ -121,7 +133,7 @@ export class ProductDialog {
     name: [this.data.product?.name ?? '', Validators.required],
     code: [this.data.product?.code ?? '', Validators.required],
     barcode: [this.data.product?.barcode ?? ''],
-    gtin: [this.data.product?.gtin ?? '', Validators.pattern(/^\d{8,14}$/)],
+    gtin: [this.data.product?.gtin ?? '', gtinValidator],
     tracking: [this.data.product?.tracking ?? ('lot' as Tracking)],
     category: [this.data.product?.category ?? ''],
     brand: [this.data.product?.brand ?? ''],
@@ -134,12 +146,31 @@ export class ProductDialog {
   protected readonly trackings = Object.keys(TRACKING_LABELS) as Tracking[];
   protected readonly trackingLabels: Record<string, string> = TRACKING_LABELS;
 
+  /** Alan dokunulduktan sonra gösterilen GTIN uyarısı */
+  protected readonly gtinError = signal('');
+
+  constructor() {
+    // Kontrol hanesi hatalı eski kayıt açıldıysa Kaydet'in neden pasif olduğu hemen görünsün
+    if (this.form.controls.gtin.value) this.fillFromScan();
+  }
+
   /** GTIN alanına tam karekod okutulduysa yalnızca ürün numarasını bırak */
   protected fillFromScan(): void {
-    const value = this.form.controls.gtin.value;
-    if (!value || /^\d{8,14}$/.test(value)) return;
-    const gtin = parseGs1(value).gtin;
-    if (gtin) this.form.controls.gtin.setValue(gtin);
+    const control = this.form.controls.gtin;
+    const value = control.value.trim();
+    if (value && !/^\d{8,14}$/.test(value)) {
+      const g = parseGs1(value);
+      if (g.gtin) control.setValue(g.gtin);
+      else if (g.error) return this.gtinError.set(g.error);
+    }
+    const errors = control.errors;
+    this.gtinError.set(
+      errors?.['gtinFormat']
+        ? 'GTIN 8-14 haneli bir sayı olmalı.'
+        : errors?.['gtinCheck']
+          ? 'GTIN kontrol hanesi tutmuyor. Ürün etiketindeki numarayı kontrol edin.'
+          : '',
+    );
   }
 
   protected save(): void {
