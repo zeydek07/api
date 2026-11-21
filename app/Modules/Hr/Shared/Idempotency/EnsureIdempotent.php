@@ -127,7 +127,9 @@ class EnsureIdempotent
 
     private function requestHash(Request $request): string
     {
-        return hash('sha256', $request->method()."\n".$request->path()."\n".$this->canonicalBody($request));
+        $query = $this->encode($this->canonicalize($request->query->all()));
+
+        return hash('sha256', implode("\n", [$request->method(), $request->path(), $query, $this->canonicalBody($request)]));
     }
 
     private function canonicalBody(Request $request): string

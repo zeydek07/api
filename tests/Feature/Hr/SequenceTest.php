@@ -42,6 +42,19 @@ class SequenceTest extends ApiTestCase
         $this->assertSame('P-000002', SequenceGenerator::next('employee_no', 'P-%06d'));
     }
 
+    public function test_ensure_is_idempotent_and_next_continues_after_it(): void
+    {
+        SequenceGenerator::ensure('employee_no');
+        SequenceGenerator::ensure('employee_no');
+
+        $this->assertSame(1, DB::table('hr_sequences')->where('key', 'employee_no')->count());
+        $this->assertSame('P-000001', SequenceGenerator::next('employee_no', 'P-%06d'));
+
+        SequenceGenerator::ensure('employee_no');
+
+        $this->assertSame('P-000002', SequenceGenerator::next('employee_no', 'P-%06d'));
+    }
+
     public function test_format_without_a_number_is_rejected(): void
     {
         $this->expectException(InvalidArgumentException::class);

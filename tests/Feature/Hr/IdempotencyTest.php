@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Hr\Shared\HrException;
 use App\Modules\Hr\Shared\Idempotency\IdempotencyKey;
 use App\Modules\Hr\Shared\Idempotency\IdempotentResourceRegistry;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -110,6 +111,44 @@ class IdempotencyTest extends ApiTestCase
         $this->send(url: '/api/hr-test-idem/6')->assertStatus(422)->assertJsonPath('code', 'idempotency.key_reused');
 
         $this->assertSame(1, $this->calls);
+    }
+
+    public function test_query_string_is_part_of_the_hash_regardless_of_order(): void
+    {
+        $this->send(url: self::URL.'?a=1&b=2')->assertCreated();
+        $this->send(url: self::URL.'?b=2&a=1')->assertCreated()->assertJsonPath('replayed', true);
+        $this->send(url: self::URL.'?a=1&b=3')->assertStatus(422)->assertJsonPath('code', 'idempotency.key_reused');
+        $this->send()->assertStatus(422)->assertJsonPath('code', 'idempotency.key_reused');
+
+        $this->assertSame(1, $this->calls);
+    }
+
+    public function test_prune_deletes_only_expired_rows(): void
+    {
+        $row = fn (string $key, ?int $status, string $expiresAt) => IdempotencyKey::create([
+            'user_id' => $this->user->id, 'key' => $key, 'route' => 'POST test', 'request_hash' => str_repeat('a', 64),
+            'status_code' => $status, 'expires_at' => $expiresAt,
+        ]);
+        $past = now()->subMinute()->toDateTimeString();
+        $future = now()->addHour()->toDateTimeString();
+
+        $row('expired-done', 201, $past);
+        $row('expired-open', null, $past);
+        $row('active-done', 201, $future);
+        $row('active-open', null, $future);
+
+        $this->artisan('hr:prune-idempotency')->assertSuccessful();
+
+        $this->assertEqualsCanonicalizing(['active-done', 'active-open'], IdempotencyKey::pluck('key')->all());
+    }
+
+    public function test_prune_is_scheduled_daily(): void
+    {
+        $event = collect(app(Schedule::class)->events())
+            ->first(fn ($e) => str_contains((string) $e->command, 'hr:prune-idempotency'));
+
+        $this->assertNotNull($event);
+        $this->assertSame('0 0 * * *', $event->expression);
     }
 
     public function test_multipart_hash_covers_file_content(): void

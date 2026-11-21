@@ -8,6 +8,16 @@ use InvalidArgumentException;
 /** Satır kilidiyle boşluksuz numara üretir; dış transaction geri alınırsa numara da geri döner. */
 class SequenceGenerator
 {
+    /**
+     * Sayaç satırını yoksa oluşturur, varsa değerine dokunmaz. Transaction dışında çağrılır.
+     * Her modül kendi anahtarlarını migration'da bununla açar; böylece normal trafikte
+     * eşzamanlı ilk ekleme (ve MySQL deadlock'u) yaşanmaz.
+     */
+    public static function ensure(string $key): void
+    {
+        DB::table('hr_sequences')->insertOrIgnore(['key' => $key, 'next_value' => 1]);
+    }
+
     public static function next(string $key, string $format): string
     {
         if (sprintf($format, 1) === sprintf($format, 2)) {
@@ -16,7 +26,7 @@ class SequenceGenerator
 
         // Satır zaten varsa INSERT IGNORE'un paylaşımlı kilidi (ve olası deadlock) hiç alınmaz.
         if (! DB::table('hr_sequences')->where('key', $key)->exists()) {
-            DB::table('hr_sequences')->insertOrIgnore(['key' => $key, 'next_value' => 1]);
+            self::ensure($key);
         }
 
         $allocate = function () use ($key): int {
