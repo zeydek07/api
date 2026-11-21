@@ -49,6 +49,13 @@ return [
             'view_all' => 'Tüm hareketleri gör',
         ]],
         'reports' => ['label' => 'Raporlar', 'actions' => ['view' => 'Görüntüle']],
+        'hr_self' => ['label' => 'Benim Sayfam', 'actions' => ['view' => 'Görüntüle']],
+        'hr_employees' => ['label' => 'İK Personel', 'actions' => [
+            'view_team' => 'Ekibini gör', 'view_all' => 'Tümünü gör', 'create' => 'Ekle',
+            'update' => 'Düzenle', 'terminate' => 'İşten çıkış', 'view_sensitive' => 'Hassas bilgileri gör',
+        ]],
+        'hr_settings' => ['label' => 'İK Ayarları', 'actions' => ['manage' => 'Yönet']],
+        'hr_audit' => ['label' => 'İK Denetim Kayıtları', 'actions' => ['view' => 'Görüntüle']],
     ],
 
     // Kurulumda oluşturulan varsayılan roller (sonradan panelden değiştirilebilir)
@@ -61,16 +68,28 @@ return [
             'warehouses.view', 'stock.view', 'stock.receive', 'stock.transfer', 'stock.adjust',
             'usage.create', 'deliveries.create', 'deliveries.cancel', 'movements.view_team', 'reports.view',
             'cases.create', 'cases.approve', 'cases.view_all', 'billing.manage',
+            'hr_self.view', 'hr_employees.view_team',
         ]],
         // Hastaneye ürün bırakır, teslim alır, ameliyat kullanımını kaydeder, iade ve sayım yapar
         'personel' => ['name' => 'Saha Personeli', 'permissions' => [
             'products.view', 'hospitals.view', 'usage.create', 'deliveries.create', 'cases.create',
+            'hr_self.view',
         ]],
         // Ürün hazırlar, sevk eder, dönen ürünleri kabul eder, lot/seri ve miktar kontrolü yapar
         'depocu' => ['name' => 'Depo Sorumlusu', 'permissions' => [
             'dashboard.view', 'products.view', 'products.create', 'products.update',
             'warehouses.view', 'stock.view', 'stock.receive', 'stock.transfer', 'stock.adjust',
-            'hospitals.view', 'movements.view_all', 'reports.view',
+            'hospitals.view', 'movements.view_all', 'reports.view', 'hr_self.view',
         ]],
+        'ik-uzmani' => ['name' => 'İK Uzmanı', 'permissions' => [
+            'hr_self.view', 'hr_employees.view_all', 'hr_employees.create', 'hr_employees.update',
+            'hr_employees.terminate', 'hr_employees.view_sensitive',
+        ]],
+        'ik-yoneticisi' => ['name' => 'İK Yöneticisi', 'permissions' => [
+            'hr_self.view', 'hr_employees.view_all', 'hr_employees.create', 'hr_employees.update',
+            'hr_employees.terminate', 'hr_employees.view_sensitive', 'hr_settings.manage', 'hr_audit.view',
+        ]],
+        'finans' => ['name' => 'Finans', 'permissions' => ['hr_self.view']],
+        'muhasebe' => ['name' => 'Muhasebe', 'permissions' => ['hr_self.view']],
     ],
 ];
