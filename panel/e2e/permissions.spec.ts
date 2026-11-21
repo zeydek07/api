@@ -6,19 +6,19 @@ const CASES = [
   {
     role: 'admin' as const,
     menu: [
-      'Kontrol Paneli', 'Hastaneye Teslim', 'Teslimatlar', 'Vakalar', 'Faturalama', 'Hastaneler', 'Ürünler', 'Stok Durumu',
-      'Stok Hareketleri', 'Depolar', 'Raporlar', 'Personeller', 'Roller ve Yetkiler',
+      'Kontrol Paneli', 'Profilim', 'Hastaneye Teslim', 'Teslimatlar', 'Vakalar', 'Faturalama', 'Hastaneler', 'Ürünler', 'Stok Durumu',
+      'Stok Hareketleri', 'Depolar', 'Raporlar', 'Kullanıcılar', 'Roller ve Yetkiler',
     ],
     forbidden: [] as string[],
   },
   {
     role: 'depocu' as const,
-    menu: ['Kontrol Paneli', 'Teslimatlar', 'Hastaneler', 'Ürünler', 'Stok Durumu', 'Stok Hareketleri', 'Depolar', 'Raporlar'],
+    menu: ['Kontrol Paneli', 'Profilim', 'Teslimatlar', 'Hastaneler', 'Ürünler', 'Stok Durumu', 'Stok Hareketleri', 'Depolar', 'Raporlar'],
     forbidden: ['/personeller', '/roller', '/teslimat'],
   },
   {
     role: 'mumessil' as const,
-    menu: ['Hastaneye Teslim', 'Teslimatlar', 'Vakalar', 'Hastaneler', 'Ürünler'],
+    menu: ['Profilim', 'Hastaneye Teslim', 'Teslimatlar', 'Vakalar', 'Hastaneler', 'Ürünler'],
     forbidden: ['/personeller', '/roller', '/stok', '/raporlar', '/depolar'],
   },
 ];

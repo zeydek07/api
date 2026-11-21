@@ -1,0 +1,23 @@
+<div class="page-head">
+  <div class="flex-1">
+    <h1 class="page-title">Benim Sayfam</h1>
+    <p class="page-sub">Personel kartınız ve kişisel bilgileriniz.</p>
+  </div>
+</div>
+
+<div class="card p-6">
+  @if (loading()) {
+    <p class="text-muted" role="status">Yükleniyor...</p>
+  } @else if (error(); as msg) {
+    <div role="alert">
+      <p class="mb-3 text-danger">{{ msg }}</p>
+      <button class="btn btn-secondary" type="button" (click)="load()"><span class="icon">refresh</span> Tekrar dene</button>
+    </div>
+  } @else if (!me()?.employee) {
+    <div class="text-center">
+      <span class="icon text-[40px] text-muted">badge</span>
+      <h2 class="mt-2 text-base font-semibold">Personel kartınız henüz oluşturulmadı</h2>
+      <p class="mt-1 text-muted">Kartınızın açılması için İnsan Kaynakları ile iletişime geçin.</p>
+    </div>
+  }
+</div>

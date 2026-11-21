@@ -24,6 +24,12 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/dashboard/dashboard').then((m) => m.DashboardPage),
       },
       {
+        path: 'benim',
+        title: 'Benim Sayfam',
+        data: { permission: 'hr_self.view' },
+        loadComponent: () => import('./pages/hr/me/me').then((m) => m.MePage),
+      },
+      {
         path: 'teslimat',
         title: 'Hastaneye Teslim',
         data: { permission: 'deliveries.create' },
@@ -73,7 +79,7 @@ export const routes: Routes = [
       },
       {
         path: 'personeller',
-        title: 'Personeller',
+        title: 'Kullanıcılar',
         data: { permission: 'users.view' },
         loadComponent: () => import('./pages/users/users').then((m) => m.UsersPage),
       },

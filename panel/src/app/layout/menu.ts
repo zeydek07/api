@@ -23,6 +23,10 @@ export const MENU_GROUPS: MenuGroup[] = [
     items: [{ label: 'Kontrol Paneli', icon: 'space_dashboard', path: '/panel', permission: 'dashboard.view' }],
   },
   {
+    title: 'Benim Sayfam',
+    items: [{ label: 'Profilim', icon: 'badge', path: '/benim', permission: 'hr_self.view' }],
+  },
+  {
     title: 'Saha',
     items: [
       { label: 'Hastaneye Teslim', icon: 'local_hospital', path: '/teslimat', permission: 'deliveries.create' },
@@ -50,7 +54,7 @@ export const MENU_GROUPS: MenuGroup[] = [
   {
     title: 'Yönetim',
     items: [
-      { label: 'Personeller', icon: 'group', path: '/personeller', permission: 'users.view' },
+      { label: 'Kullanıcılar', icon: 'group', path: '/personeller', permission: 'users.view' },
       { label: 'Roller ve Yetkiler', icon: 'shield_person', path: '/roller', permission: 'roles.view' },
     ],
   },

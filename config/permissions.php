@@ -8,7 +8,7 @@ return [
 
     'pages' => [
         'dashboard' => ['label' => 'Kontrol Paneli', 'actions' => ['view' => 'Görüntüle']],
-        'users' => ['label' => 'Personeller', 'actions' => [
+        'users' => ['label' => 'Kullanıcılar', 'actions' => [
             'view' => 'Listele', 'create' => 'Ekle', 'update' => 'Düzenle', 'delete' => 'Sil',
         ]],
         'roles' => ['label' => 'Roller ve Yetkiler', 'actions' => [
