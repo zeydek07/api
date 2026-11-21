@@ -6,8 +6,8 @@ use App\Modules\Hr\Shared\HrException;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use stdClass;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -158,9 +158,18 @@ class EnsureIdempotent
     {
         return array_map(fn ($file) => match (true) {
             is_array($file) => $this->hashFiles($file),
-            $file instanceof UploadedFile && $file->isValid() => hash_file('sha256', $file->getRealPath()),
-            default => null,
+            $file === null => null, // Boş bırakılmış isteğe bağlı dosya alanı.
+            default => $this->hashFile($file),
         }, $files);
+    }
+
+    /** Okunamayan dosyanın içeriği bilinmez; başka hiçbir istekle eşleşmemesi için tekil değer alır. */
+    private function hashFile(mixed $file): string
+    {
+        $path = $file instanceof UploadedFile && $file->isValid() ? $file->getRealPath() : false;
+        $hash = is_string($path) && is_readable($path) ? hash_file('sha256', $path) : false;
+
+        return $hash ?: 'unreadable:'.bin2hex(random_bytes(16));
     }
 
     /** Nesne anahtarlarını özyinelemeli sıralar; liste sırası anlamlı olduğu için korunur. */

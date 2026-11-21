@@ -12,6 +12,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\File\UploadedFile as SymfonyUploadedFile;
 use Tests\Feature\ApiTestCase;
 
 class IdempotencyTest extends ApiTestCase
@@ -161,6 +162,54 @@ class IdempotencyTest extends ApiTestCase
         $post('birinci')->assertCreated();
         $post('birinci')->assertCreated()->assertJsonPath('replayed', true);
         $post('ikinci')->assertStatus(422)->assertJsonPath('code', 'idempotency.key_reused');
+
+        $this->assertSame(1, $this->calls);
+    }
+
+    /** Gerçek isteklerde dosya torbası Illuminate değil, Symfony UploadedFile tutar. */
+    private function realUpload(string $content, int $error = UPLOAD_ERR_OK): SymfonyUploadedFile
+    {
+        $path = tempnam(sys_get_temp_dir(), 'hr-idem-');
+        file_put_contents($path, $content);
+        $this->beforeApplicationDestroyed(fn () => @unlink($path));
+
+        return new SymfonyUploadedFile($path, 'belge.txt', 'text/plain', $error, true);
+    }
+
+    private function sendFiles(array $files)
+    {
+        return $this->actingAs($this->user, 'sanctum')->call('POST', self::URL, ['note' => 'aynı'], [], $files, [
+            'HTTP_IDEMPOTENCY_KEY' => self::KEY,
+            'HTTP_ACCEPT' => 'application/json',
+        ]);
+    }
+
+    public function test_real_symfony_upload_is_hashed_by_content(): void
+    {
+        $this->sendFiles(['file' => $this->realUpload('birinci')])->assertCreated();
+        $this->sendFiles(['file' => $this->realUpload('birinci')])->assertCreated()->assertJsonPath('replayed', true);
+        $this->sendFiles(['file' => $this->realUpload('ikinci')])
+            ->assertStatus(422)->assertJsonPath('code', 'idempotency.key_reused');
+
+        $this->assertSame(1, $this->calls);
+    }
+
+    public function test_nested_real_uploads_are_hashed_by_content(): void
+    {
+        $files = fn (string $second) => ['docs' => ['a' => [$this->realUpload('sabit'), $this->realUpload($second)]]];
+
+        $this->sendFiles($files('birinci'))->assertCreated();
+        $this->sendFiles($files('birinci'))->assertCreated()->assertJsonPath('replayed', true);
+        $this->sendFiles($files('ikinci'))->assertStatus(422)->assertJsonPath('code', 'idempotency.key_reused');
+
+        $this->assertSame(1, $this->calls);
+    }
+
+    public function test_invalid_upload_never_matches_another_request(): void
+    {
+        $this->sendFiles(['file' => $this->realUpload('aynı', UPLOAD_ERR_PARTIAL)])->assertCreated();
+        $this->sendFiles(['file' => $this->realUpload('aynı', UPLOAD_ERR_PARTIAL)])
+            ->assertStatus(422)->assertJsonPath('code', 'idempotency.key_reused');
 
         $this->assertSame(1, $this->calls);
     }
