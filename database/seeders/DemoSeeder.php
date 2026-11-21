@@ -12,6 +12,7 @@ use App\Services\DeliveryService;
 use App\Services\StockService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Panelde denemek için örnek veri. Canlı sistemde ÇALIŞTIRMAYIN.
@@ -173,7 +174,7 @@ class DemoSeeder extends Seeder
             foreach ([20, 10] as $round => $daysAgo) {
                 $this->at($daysAgo, 10, function () use ($stock, $keepers, $central, $products, $reps, $round) {
                     foreach ($reps as $i => $rep) {
-                        $items = $products->shuffle()->take(12)->map(fn ($p) => [
+                        $items = $this->shuffled($products)->take(12)->map(fn ($p) => [
                             'product_id' => $p->id,
                             'quantity' => max(2, intdiv($p->min_stock_level, 2) + mt_rand(0, 6)),
                         ])->values()->all();
@@ -203,15 +204,15 @@ class DemoSeeder extends Seeder
                     $visits = mt_rand(0, 3);
                     for ($v = 0; $v < $visits; $v++) {
                         $this->at($daysAgo, 9 + $v * 2 + mt_rand(0, 1), function () use ($stock, $rep, $regional) {
-                            $available = Stock::where('warehouse_id', $rep['bag']->id)->where('quantity', '>=', 1)->get();
+                            $available = Stock::where('warehouse_id', $rep['bag']->id)->where('quantity', '>=', 1)->orderBy('id')->get();
                             if ($available->isEmpty()) {
                                 return;
                             }
-                            $items = $available->shuffle()->take(mt_rand(1, 3))->map(fn ($s) => [
+                            $items = $this->shuffled($available)->take(mt_rand(1, 3))->map(fn ($s) => [
                                 'product_id' => $s->product_id,
                                 'quantity' => min((int) $s->quantity, mt_rand(1, 4)),
                             ])->values()->all();
-                            $hospital = $regional->random();
+                            $hospital = $this->pick($regional);
                             $stock->recordUsage($rep['user'], $rep['bag'], $items, [
                                 'hospital_id' => $hospital->id,
                                 'reference' => 'Teslim fişi '.mt_rand(10000, 99999),
@@ -241,13 +242,13 @@ class DemoSeeder extends Seeder
             foreach ([9, 7, 5, 3, 1] as $daysAgo) {
                 foreach ($reps as $rep) {
                     $this->at($daysAgo, 10 + mt_rand(0, 6), function () use ($deliveries, $rep, $hospitals) {
-                        $hospital = $hospitals->where('city', $rep['city'])->random();
-                        $rows = Stock::where('warehouse_id', $rep['bag']->id)->where('quantity', '>=', 1)
-                            ->whereDate('expiry_date', '>=', now())->get()->shuffle()->take(mt_rand(2, 4));
+                        $hospital = $this->pick($hospitals->where('city', $rep['city']));
+                        $rows = $this->shuffled(Stock::where('warehouse_id', $rep['bag']->id)->where('quantity', '>=', 1)
+                            ->whereDate('expiry_date', '>=', now())->orderBy('id')->get())->take(mt_rand(2, 4));
                         if ($rows->isEmpty()) {
                             return;
                         }
-                        $contact = $hospital->contacts()->inRandomOrder()->first();
+                        $contact = $this->pick($hospital->contacts()->orderBy('id')->get());
                         $deliveries->create($rep['user'], [
                             'type' => 'delivery',
                             'hospital_id' => $hospital->id,
@@ -295,6 +296,21 @@ class DemoSeeder extends Seeder
         } finally {
             Carbon::setTestNow();
         }
+    }
+
+    /** Collection::shuffle mt_srand tohumuna uymaz; demo verisi her çalıştırmada aynı kalsın diye PHP shuffle kullanılır. */
+    private function shuffled(Collection $items): Collection
+    {
+        $list = $items->values()->all();
+        shuffle($list);
+
+        return collect($list);
+    }
+
+    /** Collection::random yerine tohumlu seçim. */
+    private function pick(Collection $items): mixed
+    {
+        return $items->values()->get(mt_rand(0, $items->count() - 1));
     }
 
     /** Kaynak depoda olandan fazlasını istemesin */
