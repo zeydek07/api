@@ -72,7 +72,7 @@ panel/e2e/hr.spec.ts
 
 # Aşama 0: Temel
 
-### Görev 1: Modül iskeleti, yetkiler ve roller
+### Task 1: Modül iskeleti, yetkiler ve roller
 
 **Files:**
 - Create: `app/Modules/Hr/HrServiceProvider.php`, `app/Modules/Hr/Shared/HrException.php`, `app/Modules/Hr/Employees/Http/Controllers/MeController.php`, `config/hr.php`, `routes/hr.php`, `tests/Feature/Hr/HrFoundationTest.php`
@@ -148,7 +148,7 @@ Varsayılan roller:
 - [ ] **Step 4: PASS:** `php artisan test`
 - [ ] **Step 5: Commit:** `İK: modül iskeleti, yetkiler ve departman rolleri`
 
-### Görev 2: Değiştirilemez audit log
+### Task 2: Değiştirilemez audit log
 
 **Files:**
 - Create: `database/migrations/hr/2026_11_22_000100_create_hr_audit_logs_table.php`, `Shared/Audit/{AuditLog,AuditLogger,AuditLogController}.php`, `tests/Feature/Hr/AuditLogTest.php`
@@ -176,7 +176,7 @@ test_audit_list_filters_by_employee_and_action
 - [ ] **Step 4: PASS:** `php artisan test`
 - [ ] **Step 5: Commit:** `İK: değiştirilemez denetim kaydı`
 
-### Görev 3: Numara üretimi ve idempotency
+### Task 3: Numara üretimi ve idempotency
 
 **Files:**
 - Create: `database/migrations/hr/2026_11_22_000200_create_hr_sequences_and_idempotency_tables.php`, `Shared/Sequences/SequenceGenerator.php`, `Shared/Idempotency/{IdempotencyKey,EnsureIdempotent,IdempotentResourceRegistry}.php`, `tests/Feature/Hr/SequenceTest.php`, `tests/Feature/Hr/IdempotencyTest.php`, `tests/Concurrency/sequence_worker.php`
@@ -234,7 +234,7 @@ Beklenen: paralel test **skipped değil, passed**.
 
 - [ ] **Step 6: Commit:** `İK: güvenli numara üretimi ve idempotency`
 
-### Görev 4: Kuyruklu bildirim
+### Task 4: Kuyruklu bildirim
 
 **Files:**
 - Create: `Shared/Notifications/{HrNotifier,HrMessageMail}.php`, `resources/views/mail/hr-message.blade.php`, `tests/Feature/Hr/HrNotifierTest.php`
@@ -255,7 +255,7 @@ test_inactive_user_is_skipped
 - [ ] **Step 4: PASS:** `php artisan test`
 - [ ] **Step 5: Commit:** `İK: kuyruklu bildirim altyapısı`
 
-### Görev 5: Panel menüsü ve Kullanıcılar adı
+### Task 5: Panel menüsü ve Kullanıcılar adı
 
 **Files:**
 - Create: `panel/src/app/pages/hr/me/me.ts`, `me.html`, `panel/src/app/core/hr.models.ts`, `panel/e2e/hr.spec.ts`
@@ -282,7 +282,7 @@ test('yönetim menüsünde Kullanıcılar yazar', ...)
 
 # Aşama 1: Personel
 
-### Görev 6: Departman, pozisyon ve tanımlar
+### Task 6: Departman, pozisyon ve tanımlar
 
 **Files:**
 - Create: `database/migrations/hr/2026_11_22_000300_create_hr_org_tables.php`, `Employees/Models/{Department,Position,Category,Language,TerminationReason}.php`, ilgili controller'lar, `tests/Feature/Hr/OrgDefinitionsTest.php`
@@ -313,7 +313,7 @@ test_specialist_cannot_write_definitions       // 403
 - [ ] **Step 4: PASS:** `php artisan test`
 - [ ] **Step 5: Commit:** `İK: departman, pozisyon ve tanımlar`
 
-### Görev 7: Personel kartı ve kapsamlı erişim
+### Task 7: Personel kartı ve kapsamlı erişim
 
 **Files:**
 - Create: `database/migrations/hr/2026_11_22_000400_create_hr_employees_table.php`, `Models/Employee.php`, `Services/{EmployeeService,EmployeeScope,SensitiveData}.php`, `Rules/{TurkishNationalId,TurkishIban}.php`, `Http/Requests/*`, `Http/Resources/EmployeeResource.php`, `Http/Controllers/EmployeeController.php`, `tests/Feature/Hr/EmployeeTest.php`, `tests/Unit/Hr/SensitiveRulesTest.php`
@@ -368,7 +368,7 @@ test_search_filters_and_pagination_max_100
 - [ ] **Step 4: PASS:** `php artisan test`
 - [ ] **Step 5: Commit:** `İK: personel kartı, şifreli alanlar ve kapsamlı erişim`
 
-### Görev 8: Hassas alan açma (reveal)
+### Task 8: Hassas alan açma (reveal)
 
 **Files:**
 - Modify: `EmployeeController.php`, `routes/hr.php`
@@ -394,7 +394,7 @@ test_rate_limit_returns_429
 - [ ] **Step 4: PASS:** `php artisan test`
 - [ ] **Step 5: Commit:** `İK: hassas alanların kayıtlı açılması`
 
-### Görev 9: Acil durum kişileri, yakınlar, diller, kategoriler
+### Task 9: Acil durum kişileri, yakınlar, diller, kategoriler
 
 **Files:**
 - Create: `database/migrations/hr/2026_11_22_000500_create_hr_employee_detail_tables.php`, `Models/{EmergencyContact,Relative,EmployeeLanguage}.php`, `Http/Controllers/EmployeeDetailsController.php`, `tests/Feature/Hr/EmployeeDetailsTest.php`
@@ -424,7 +424,7 @@ test_changes_are_audited
 - [ ] **Step 4: PASS:** `php artisan test`
 - [ ] **Step 5: Commit:** `İK: acil durum, yakın, dil ve kategori bilgileri`
 
-### Görev 10: İşe giriş, transfer, ayrılış, yeniden giriş
+### Task 10: İşe giriş, transfer, ayrılış, yeniden giriş
 
 **Files:**
 - Create: `database/migrations/hr/2026_11_22_000600_create_hr_employment_events_table.php`, `Models/EmploymentEvent.php`, `Services/EmployeeLifecycleService.php`, `Events/EmployeeTerminated.php`, `Http/Controllers/EmployeeLifecycleController.php`, `tests/Feature/Hr/EmployeeLifecycleTest.php`
@@ -472,7 +472,7 @@ test_existing_stock_visibility_unchanged_after_transfer // teamUserIds aynı
 - [ ] **Step 4: PASS:** `php artisan test`
 - [ ] **Step 5: Commit:** `İK: işe giriş, transfer, ayrılış ve zaman çizelgesi`
 
-### Görev 11: Benim Sayfam API
+### Task 11: Benim Sayfam API
 
 **Files:**
 - Modify: `Http/Controllers/MeController.php`
@@ -494,7 +494,7 @@ test_employee_never_gets_other_employee_via_me
 - [ ] **Step 4: PASS:** `php artisan test`
 - [ ] **Step 5: Commit:** `İK: Benim Sayfam API`
 
-### Görev 12: Panel: tanımlar ve personel listesi
+### Task 12: Panel: tanımlar ve personel listesi
 
 **Files:**
 - Create: `panel/src/app/pages/hr/definitions/*`, `panel/src/app/pages/hr/employees/{employees.ts,employees.html,employee-dialog.ts,employee-dialog.html}`
@@ -520,7 +520,7 @@ test('yönetici yalnızca ekibini görür', ...)
 - [ ] **Step 4: PASS:** `npm --prefix panel run build` ve `npm --prefix panel run e2e -- hr.spec.ts`
 - [ ] **Step 5: Commit:** `Panel: İK tanımları ve personel listesi`
 
-### Görev 13: Panel: personel kartı, ayrılış, denetim, Benim Sayfam
+### Task 13: Panel: personel kartı, ayrılış, denetim, Benim Sayfam
 
 **Files:**
 - Create: `panel/src/app/pages/hr/employee-detail/*`, `panel/src/app/pages/hr/audit/*`
@@ -546,7 +546,7 @@ test('denetim kaydı yalnızca İK Yöneticisine görünür', ...)
 - [ ] **Step 4: PASS:** `npm --prefix panel run build` ve `npm --prefix panel run e2e -- hr.spec.ts`
 - [ ] **Step 5: Commit:** `Panel: personel kartı, ayrılış akışı ve denetim kayıtları`
 
-### Görev 14: Aşama kapanışı
+### Task 14: Aşama kapanışı
 
 **Files:**
 - Modify: `database/seeders/DemoSeeder.php` (yalnızca sahte İK kullanıcıları ve personel), `tests/Feature/DemoSeederTest.php`
