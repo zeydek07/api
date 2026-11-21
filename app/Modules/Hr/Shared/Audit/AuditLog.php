@@ -19,6 +19,11 @@ class AuditLog extends Model
         return ['changed_fields' => 'array'];
     }
 
+    public function newEloquentBuilder($query): AuditLogBuilder
+    {
+        return new AuditLogBuilder($query);
+    }
+
     protected static function booted(): void
     {
         static::updating(fn () => throw new RuntimeException('Denetim kaydı değiştirilemez.'));

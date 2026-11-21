@@ -90,6 +90,38 @@ class AuditLogTest extends ApiTestCase
         }
     }
 
+    public function test_bulk_update_and_delete_paths_are_blocked(): void
+    {
+        $log = AuditLogger::record('employee.created', 'employee', 1, null, ['iban']);
+        AuditLogger::record('employee.updated', 'employee', 1);
+        $before = AuditLog::query()->orderBy('id')->get()->toArray();
+
+        $ops = [
+            'update' => fn () => AuditLog::query()->update(['action' => 'x']),
+            'where update' => fn () => AuditLog::where('id', $log->id)->update(['action' => 'x']),
+            'delete' => fn () => AuditLog::query()->delete(),
+            'where delete' => fn () => AuditLog::where('id', $log->id)->delete(),
+            'forceDelete' => fn () => AuditLog::query()->forceDelete(),
+            'truncate' => fn () => AuditLog::query()->truncate(),
+            'static truncate' => fn () => AuditLog::truncate(),
+            'upsert' => fn () => AuditLog::query()->upsert([['id' => $log->id, 'action' => 'x']], ['id'], ['action']),
+            'increment' => fn () => AuditLog::query()->increment('subject_id'),
+            'decrement' => fn () => AuditLog::query()->decrement('subject_id'),
+        ];
+
+        foreach ($ops as $name => $op) {
+            try {
+                $op();
+                $this->fail("{$name} engellenmedi.");
+            } catch (\RuntimeException) {
+            }
+
+            $this->assertSame($before, AuditLog::query()->orderBy('id')->get()->toArray(), $name);
+        }
+
+        $this->assertSame(2, AuditLog::count());
+    }
+
     public function test_audit_is_rolled_back_with_business_transaction(): void
     {
         try {
