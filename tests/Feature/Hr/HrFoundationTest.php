@@ -55,6 +55,23 @@ class HrFoundationTest extends ApiTestCase
         $this->assertFalse($role->fresh()->permissions()->where('key', 'hr_self.view')->exists());
     }
 
+    public function test_storage_path_has_no_default_inside_project(): void
+    {
+        $old = getenv('HR_STORAGE_PATH');
+        unset($_ENV['HR_STORAGE_PATH'], $_SERVER['HR_STORAGE_PATH']);
+        putenv('HR_STORAGE_PATH');
+
+        try {
+            $config = require config_path('hr.php');
+        } finally {
+            if ($old !== false) {
+                putenv("HR_STORAGE_PATH={$old}");
+            }
+        }
+
+        $this->assertNull($config['storage_path']);
+    }
+
     public function test_hr_exception_uses_contract_shape(): void
     {
         Route::middleware('api')->get('api/hr-test-throw', function () {
