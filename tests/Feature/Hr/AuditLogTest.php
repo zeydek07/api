@@ -5,6 +5,7 @@ namespace Tests\Feature\Hr;
 use App\Modules\Hr\Shared\Audit\AuditLog;
 use App\Modules\Hr\Shared\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Tests\Feature\ApiTestCase;
 
 class AuditLogTest extends ApiTestCase
@@ -28,6 +29,32 @@ class AuditLogTest extends ApiTestCase
 
         $second = app(AuditLogger::class)->record('employee.viewed', 'employee', 7, 7);
         $this->assertSame($log->request_id, $second->request_id);
+    }
+
+    public function test_record_uses_actor_from_real_bearer_token(): void
+    {
+        Route::middleware(['api', 'auth:sanctum', 'active'])->get('api/hr-test-audit', function () {
+            $a = AuditLogger::record('test.one', 'employee', 1);
+            $b = AuditLogger::record('test.two', 'employee', 1);
+
+            return response()->json(['ids' => [$a->id, $b->id]]);
+        });
+
+        $user = $this->userWithRole('ik-yoneticisi');
+        $token = $this->tokenFor($user);
+
+        $first = $this->withToken($token)->getJson('/api/hr-test-audit')->assertOk()->json('ids');
+        $second = $this->withToken($token)->getJson('/api/hr-test-audit')->assertOk()->json('ids');
+
+        $a = AuditLog::findOrFail($first[0]);
+        $b = AuditLog::findOrFail($first[1]);
+        $c = AuditLog::findOrFail($second[0]);
+
+        $this->assertSame($user->id, $a->actor_user_id);
+        $this->assertNotNull($a->ip);
+        $this->assertNotEmpty($a->request_id);
+        $this->assertSame($a->request_id, $b->request_id);
+        $this->assertNotSame($a->request_id, $c->request_id);
     }
 
     public function test_record_works_without_request_context(): void
